@@ -1,0 +1,5 @@
+[
+  { "id": 1, "title": "Design database schema", "description": "Users and tasks tables", "status": "DONE", "priority": "HIGH", "dueDate": "2026-10-01", "createdAt": "2026-09-20T10:00:00", "updatedAt": "2026-09-25T10:00:00" },
+  { "id": 2, "title": "Implement JWT auth", "description": null, "status": "IN_PROGRESS", "priority": "HIGH", "dueDate": null, "createdAt": "2026-09-21T10:00:00", "updatedAt": "2026-09-21T10:00:00" },
+  { "id": 3, "title": "Write Cypress tests", "description": "E2E coverage", "status": "TODO", "priority": "LOW", "dueDate": null, "createdAt": "2026-09-22T10:00:00", "updatedAt": "2026-09-22T10:00:00" }
+]

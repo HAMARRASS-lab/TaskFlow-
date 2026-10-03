@@ -1,0 +1,18 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+.DS_Store
+
+# Backend
+backend/target/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/coverage/
+frontend/cypress/videos/
+frontend/cypress/screenshots/
+
+.env

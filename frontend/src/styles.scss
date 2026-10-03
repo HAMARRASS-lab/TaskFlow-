@@ -1,0 +1,8 @@
+html, body { height: 100%; }
+body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif; background: #f5f7fb; }
+
+.page { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+.spacer { flex: 1 1 auto; }
+.full-width { width: 100%; }
+.auth-card { max-width: 420px; margin: 64px auto; padding: 8px; }
+.error-text { color: #b3261e; margin: 8px 0; }
