@@ -5,7 +5,7 @@
 | Backend   | Java 21, Spring Boot 3.3, Spring Security + JWT (jjwt), Spring Data JPA, Flyway, PostgreSQL, OpenAPI |
 | Frontend  | Angular 18 (standalone), NgRx (store, effects, entity), Angular Material |
 | Tests     | JUnit 5 + Mockito + MockMvc (H2), Jest (jest-preset-angular), Cypress |
-| Ops       | Docker (multi-stage), docker-compose, GitHub Actions CI/CD → GHCR → Render |
+| Ops       | Docker (multi-stage), docker-compose, GitHub Actions CI |
 
 ```
 taskflow/
@@ -20,8 +20,7 @@ taskflow/
 │   ├── src/app/features/    login, register, task board (NgRx tasks store)
 │   └── cypress/             E2E specs (API stubbed with cy.intercept)
 ├── docker-compose.yml       postgres + backend + frontend (nginx)
-├── render.yaml              cloud blueprint (Render)
-└── .github/workflows/ci-cd.yml
+└── .github/workflows/ci-cd.yml   CI: tests + build
 ```
 
 ## Run locally
@@ -78,21 +77,10 @@ All `/api/tasks` endpoints require `Authorization: Bearer <token>`.
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` |
 | `PORT` | `8080` |
 
-## CI/CD & cloud deployment
+## CI
 
-Pipeline (`.github/workflows/ci-cd.yml`):
+`.github/workflows/ci-cd.yml` runs on every push and pull request:
 
 1. **backend** — `mvn verify` (JUnit + JaCoCo)
 2. **frontend** — Jest with coverage + production build
 3. **e2e** — Cypress against `ng serve`
-4. **docker** (main only) — builds & pushes `ghcr.io/<owner>/<repo>-backend|frontend`
-5. **deploy** (main only) — calls Render deploy hooks
-
-Deploying to Render:
-
-1. Push this repo to GitHub.
-2. On Render: **New → Blueprint** → choose the repo. `render.yaml` creates the PostgreSQL DB, `taskflow-api` and `taskflow-web`.
-3. If your service names/URLs differ, adjust `CORS_ALLOWED_ORIGINS` and `BACKEND_URL` in `render.yaml`.
-4. Copy each service's *Deploy Hook* URL into GitHub repo secrets `RENDER_DEPLOY_HOOK_BACKEND` and `RENDER_DEPLOY_HOOK_FRONTEND`.
-
-Every push to `main` that passes all tests now deploys automatically.

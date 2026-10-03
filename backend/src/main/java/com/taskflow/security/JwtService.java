@@ -26,7 +26,7 @@ public class JwtService {
         this.expirationMs = expirationMs;
     }
 
-    /** Accepts a Base64 key, falling back to the raw bytes (e.g. Render's generated values). */
+    /** Accepts a Base64 key, falling back to the raw bytes (e.g. random generated strings). */
     private static byte[] decodeSecret(String secret) {
         try {
             return Decoders.BASE64.decode(secret);
