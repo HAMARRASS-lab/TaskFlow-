@@ -42,6 +42,13 @@ class JwtServiceTest {
     }
 
     @Test
+    void acceptsNonBase64Secret() {
+        JwtService raw = new JwtService("not_base64-but-long-enough-secret-value-123456", 60_000);
+
+        assertThat(raw.extractUsername(raw.generateToken(alice))).isEqualTo("alice@test.com");
+    }
+
+    @Test
     void rejectsTamperedToken() {
         String token = jwtService.generateToken(alice) + "tampered";
 

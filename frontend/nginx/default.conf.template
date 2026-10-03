@@ -10,6 +10,9 @@ server {
     location /api/ {
         proxy_pass ${BACKEND_URL};
         proxy_ssl_server_name on;
+        # Same-origin for the browser; drop Origin so the API doesn't apply CORS checks
+        # (auth is a Bearer token, not cookies, so this doesn't open CSRF).
+        proxy_set_header Origin "";
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }

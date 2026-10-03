@@ -10,6 +10,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.Map;
 
@@ -21,8 +22,17 @@ public class JwtService {
 
     public JwtService(@Value("${app.jwt.secret}") String secret,
                       @Value("${app.jwt.expiration-ms}") long expirationMs) {
-        this.key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(secret));
+        this.key = Keys.hmacShaKeyFor(decodeSecret(secret));
         this.expirationMs = expirationMs;
+    }
+
+    /** Accepts a Base64 key, falling back to the raw bytes (e.g. Render's generated values). */
+    private static byte[] decodeSecret(String secret) {
+        try {
+            return Decoders.BASE64.decode(secret);
+        } catch (RuntimeException e) {
+            return secret.getBytes(StandardCharsets.UTF_8);
+        }
     }
 
     public String generateToken(UserDetails user, Map<String, Object> extraClaims) {
