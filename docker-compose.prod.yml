@@ -1,5 +1,6 @@
-# Production stack: only nginx (port 80) is published; Postgres and the API stay on the internal network.
-# Secrets come from .env next to this file (see deploy.sh).
+# Production stack: only Caddy (80/443) is published; it terminates HTTPS (automatic Let's Encrypt)
+# and proxies to the nginx frontend. Postgres and the API stay on the internal network.
+# Secrets and DOMAIN come from .env next to this file (see deploy.sh).
 services:
   db:
     image: postgres:16-alpine
@@ -37,8 +38,24 @@ services:
       - backend
     environment:
       BACKEND_URL: http://backend:8080
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN must be set}
     ports:
       - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
 
 volumes:
   pgdata:
+  caddy_data:
+  caddy_config:

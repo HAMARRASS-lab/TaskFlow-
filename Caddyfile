@@ -1,0 +1,10 @@
+# HTTPS for the app domain (certificate obtained and renewed automatically by Caddy).
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:80
+}
+
+# Any other plain-HTTP request (e.g. the bare server IP) goes to the HTTPS domain.
+http:// {
+	redir https://{$DOMAIN}{uri} permanent
+}

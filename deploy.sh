@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # Deploy TaskFlow to a fresh Ubuntu/Debian server over SSH.
-#   ./deploy.sh <server-ip> [ssh-user]
+#   ./deploy.sh <server-ip> [ssh-user] [domain]
 # Installs Docker on first run, syncs the repo, keeps secrets in /opt/taskflow/.env
 # (generated once on the server, never overwritten) and rebuilds the stack.
+# HTTPS is served by Caddy for <domain>; it defaults to <server-ip>.sslip.io, which
+# resolves to the server without any DNS setup. A real domain needs an A record to the IP.
 set -euo pipefail
 
-HOST="${1:?usage: ./deploy.sh <server-ip> [ssh-user]}"
+HOST="${1:?usage: ./deploy.sh <server-ip> [ssh-user] [domain]}"
 USER_NAME="${2:-root}"
+DOMAIN="${3:-${HOST//./-}.sslip.io}"
 TARGET="$USER_NAME@$HOST"
 APP_DIR=/opt/taskflow
 
@@ -27,7 +30,10 @@ rsync -az --delete \
 echo "==> Creating secrets (first deploy only)"
 ssh "$TARGET" "cd $APP_DIR && [ -f .env ] || { umask 077; printf 'DB_PASSWORD=%s\nJWT_SECRET=%s\n' \"\$(openssl rand -hex 24)\" \"\$(openssl rand -base64 48 | tr -d '\n')\" > .env; }"
 
+echo "==> Setting domain to $DOMAIN"
+ssh "$TARGET" "cd $APP_DIR && sed -i '/^DOMAIN=/d' .env && echo 'DOMAIN=$DOMAIN' >> .env"
+
 echo "==> Building and starting containers"
 ssh "$TARGET" "cd $APP_DIR && docker compose -f docker-compose.prod.yml up -d --build --remove-orphans && docker image prune -f >/dev/null"
 
-echo "==> Done: http://$HOST"
+echo "==> Done: https://$DOMAIN"
