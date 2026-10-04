@@ -24,29 +24,29 @@ export function toIsoDate(date: Date | null): string | null {
     <h2 mat-dialog-title>{{ data ? 'Edit task' : 'New task' }}</h2>
     <form [formGroup]="form" (ngSubmit)="save()">
       <mat-dialog-content>
-        <mat-form-field class="full-width">
+        <mat-form-field appearance="outline" class="full-width">
           <mat-label>Title</mat-label>
           <input matInput formControlName="title" maxlength="200" cdkFocusInitial data-cy="task-title" />
         </mat-form-field>
-        <mat-form-field class="full-width">
+        <mat-form-field appearance="outline" class="full-width">
           <mat-label>Description</mat-label>
           <textarea matInput formControlName="description" rows="3" maxlength="2000"></textarea>
         </mat-form-field>
         <div class="row">
-          <mat-form-field>
+          <mat-form-field appearance="outline">
             <mat-label>Status</mat-label>
             <mat-select formControlName="status">
               @for (s of statuses; track s) { <mat-option [value]="s">{{ labels[s] }}</mat-option> }
             </mat-select>
           </mat-form-field>
-          <mat-form-field>
+          <mat-form-field appearance="outline">
             <mat-label>Priority</mat-label>
             <mat-select formControlName="priority">
               @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
             </mat-select>
           </mat-form-field>
         </div>
-        <mat-form-field class="full-width">
+        <mat-form-field appearance="outline" class="full-width">
           <mat-label>Due date</mat-label>
           <input matInput [matDatepicker]="picker" formControlName="dueDate" />
           <mat-datepicker-toggle matIconSuffix [for]="picker" />
