@@ -92,4 +92,125 @@ class ApiIntegrationTest {
                         .content("{\"email\":\"nobody@test.com\",\"password\":\"whatever1\"}"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void manageMeetingsInCalendar() throws Exception {
+        String email = "meet-" + UUID.randomUUID() + "@test.com";
+        String registered = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"Meet User\"}"
+                                .formatted(email)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String bearer = "Bearer " + json.readTree(registered).get("token").asText();
+
+        String created = mvc.perform(post("/api/meetings").header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Kick-off","location":"Room A","startAt":"2026-11-02T09:00:00",
+                                 "endAt":"2026-11-02T10:00:00","participants":["bob@test.com"]}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.participants[0].participant").value("bob@test.com"))
+                .andExpect(jsonPath("$.organizedByMe").value(true))
+                .andReturn().getResponse().getContentAsString();
+        long id = json.readTree(created).get("id").asLong();
+
+        // overlapping slot is rejected
+        mvc.perform(post("/api/meetings").header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Clash\",\"startAt\":\"2026-11-02T09:30:00\",\"endAt\":\"2026-11-02T11:00:00\"}"))
+                .andExpect(status().isConflict());
+
+        // end before start is rejected
+        mvc.perform(post("/api/meetings").header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Bad\",\"startAt\":\"2026-11-03T10:00:00\",\"endAt\":\"2026-11-03T09:00:00\"}"))
+                .andExpect(status().isBadRequest());
+
+        mvc.perform(get("/api/meetings").header("Authorization", bearer)
+                        .param("from", "2026-11-01T00:00:00").param("to", "2026-12-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        mvc.perform(get("/api/meetings").header("Authorization", bearer)
+                        .param("from", "2026-12-01T00:00:00").param("to", "2027-01-01T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+
+        mvc.perform(put("/api/meetings/{id}", id).header("Authorization", bearer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Kick-off v2\",\"startAt\":\"2026-11-02T09:00:00\",\"endAt\":\"2026-11-02T10:30:00\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Kick-off v2"))
+                .andExpect(jsonPath("$.participants.length()").value(0));
+
+        mvc.perform(delete("/api/meetings/{id}", id).header("Authorization", bearer))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/meetings/{id}", id).header("Authorization", bearer))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void sharesMeetingsWithInvitedUsers() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String organizer = register("org-" + suffix + "@test.com", "Olivia Org");
+        String inviteeEmail = "inv-" + suffix + "@test.com";
+        String invitee = register(inviteeEmail, "Ivan Invitee");
+        String outsider = register("out-" + suffix + "@test.com", "Oscar Out");
+
+        String created = mvc.perform(post("/api/meetings").header("Authorization", organizer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"title":"Planning","startAt":"2027-03-01T14:00:00","endAt":"2027-03-01T15:00:00",
+                                 "participants":["%s","Guest without account"]}""".formatted(inviteeEmail.toUpperCase())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.participants[0].fullName").value("Ivan Invitee"))
+                .andExpect(jsonPath("$.participants[1].fullName").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        long id = json.readTree(created).get("id").asLong();
+
+        // the invitee sees it in their calendar and in their pending invitations
+        mvc.perform(get("/api/meetings").header("Authorization", invitee)
+                        .param("from", "2027-03-01T00:00:00").param("to", "2027-03-02T00:00:00"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].organizedByMe").value(false))
+                .andExpect(jsonPath("$[0].myStatus").value("PENDING"))
+                .andExpect(jsonPath("$[0].organizer.fullName").value("Olivia Org"));
+        mvc.perform(get("/api/meetings/invitations").header("Authorization", invitee))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1));
+
+        // other users don't see it at all
+        mvc.perform(get("/api/meetings/{id}", id).header("Authorization", outsider))
+                .andExpect(status().isNotFound());
+
+        // the invitee can't edit or delete, only answer
+        mvc.perform(delete("/api/meetings/{id}", id).header("Authorization", invitee))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/meetings/{id}/response", id).header("Authorization", invitee)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"ACCEPTED\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myStatus").value("ACCEPTED"));
+        mvc.perform(get("/api/meetings/invitations").header("Authorization", invitee))
+                .andExpect(jsonPath("$.length()").value(0));
+
+        // the accepted meeting now blocks the invitee's own agenda
+        mvc.perform(post("/api/meetings").header("Authorization", invitee)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Clash\",\"startAt\":\"2027-03-01T14:30:00\",\"endAt\":\"2027-03-01T16:00:00\"}"))
+                .andExpect(status().isConflict());
+
+        // the organizer sees the answer
+        mvc.perform(get("/api/meetings/{id}", id).header("Authorization", organizer))
+                .andExpect(jsonPath("$.participants[0].status").value("ACCEPTED"));
+    }
+
+    private String register(String email, String fullName) throws Exception {
+        String body = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"%s\"}"
+                                .formatted(email, fullName)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        return "Bearer " + json.readTree(body).get("token").asText();
+    }
 }

@@ -13,6 +13,8 @@ import { authFeature } from './core/auth/store/auth.reducer';
 import * as authEffects from './core/auth/store/auth.effects';
 import { tasksFeature } from './features/tasks/store/tasks.reducer';
 import * as tasksEffects from './features/tasks/store/tasks.effects';
+import { meetingsFeature } from './features/meetings/store/meetings.reducer';
+import * as meetingsEffects from './features/meetings/store/meetings.effects';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -21,8 +23,12 @@ export const appConfig: ApplicationConfig = {
     provideHttpClient(withInterceptors([authInterceptor])),
     provideAnimationsAsync(),
     provideNativeDateAdapter(),
-    provideStore({ [authFeature.name]: authFeature.reducer, [tasksFeature.name]: tasksFeature.reducer }),
-    provideEffects(authEffects, tasksEffects),
+    provideStore({
+      [authFeature.name]: authFeature.reducer,
+      [tasksFeature.name]: tasksFeature.reducer,
+      [meetingsFeature.name]: meetingsFeature.reducer,
+    }),
+    provideEffects(authEffects, tasksEffects, meetingsEffects),
     provideStoreDevtools({ maxAge: 25, logOnly: !isDevMode() }),
   ],
 };

@@ -12,12 +12,13 @@ taskflow/
 ├── backend/                 Spring Boot API  (com.taskflow)
 │   ├── auth/                register / login / me  (JWT)
 │   ├── task/                CRUD + status for the current user's tasks
+│   ├── meeting/             shared meetings calendar (invitations, accept/decline, overlap check)
 │   ├── security/            JwtService, JwtAuthFilter
 │   ├── config/              SecurityConfig (stateless, CORS), OpenAPI
 │   └── resources/db/migration   Flyway SQL migrations
 ├── frontend/                Angular SPA
 │   ├── src/app/core/auth    AuthService, interceptor, guards, NgRx auth store
-│   ├── src/app/features/    login, register, task board (NgRx tasks store)
+│   ├── src/app/features/    login, register, task board, meetings calendar (NgRx stores)
 │   └── cypress/             E2E specs (API stubbed with cy.intercept)
 ├── docker-compose.yml       postgres + backend + frontend (nginx)
 └── .github/workflows/ci-cd.yml   CI: tests + build
@@ -64,8 +65,17 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | PUT | `/api/tasks/{id}` | update |
 | PATCH | `/api/tasks/{id}/status` | `{status}` |
 | DELETE | `/api/tasks/{id}` | delete |
+| GET | `/api/meetings?from=&to=` | meetings I organize or am invited to, overlapping `[from, to)` (ISO local date-times, optional) |
+| GET | `/api/meetings/invitations` | upcoming meetings shared with me that I have not answered |
+| GET | `/api/meetings/{id}` | one meeting |
+| POST | `/api/meetings` | create `{title, startAt, endAt, description?, location?, participants?}` — 400 if `endAt <= startAt`, 409 if it overlaps another meeting |
+| PUT | `/api/meetings/{id}` | update (organizer only, else 403) — rescheduling resets answers to `PENDING` |
+| PATCH | `/api/meetings/{id}/response` | invitee answers `{status: ACCEPTED \| DECLINED}` — 409 if accepting overlaps their agenda |
+| DELETE | `/api/meetings/{id}` | delete (organizer only) |
 
-All `/api/tasks` endpoints require `Authorization: Bearer <token>`.
+All `/api/tasks` and `/api/meetings` endpoints require `Authorization: Bearer <token>`.
+
+**Meeting sharing** — a participant whose email matches a registered user sees the meeting in their calendar (read-only) and can accept or decline it. Other participants (plain names, unknown emails) are informational. Double-booking is checked against the meetings a user organizes or has accepted.
 
 ## Configuration (backend env vars)
 
