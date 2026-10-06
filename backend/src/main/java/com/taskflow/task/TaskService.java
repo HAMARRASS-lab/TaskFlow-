@@ -1,22 +1,30 @@
 package com.taskflow.task;
 
 import com.taskflow.common.NotFoundException;
+import com.taskflow.task.TaskDtos.TaskOwnerSummary;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
+import com.taskflow.task.TaskRepository.OwnerStatusCount;
 import com.taskflow.user.User;
+import com.taskflow.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Transactional
 public class TaskService {
 
     private final TaskRepository tasks;
+    private final UserRepository users;
 
-    public TaskService(TaskRepository tasks) {
+    public TaskService(TaskRepository tasks, UserRepository users) {
         this.tasks = tasks;
+        this.users = users;
     }
 
     @Transactional(readOnly = true)
@@ -30,6 +38,34 @@ public class TaskService {
     @Transactional(readOnly = true)
     public TaskResponse findOne(User owner, Long id) {
         return TaskResponse.from(load(owner, id));
+    }
+
+    /** Every user who has created at least one task, with per-status counts, sorted by name. */
+    @Transactional(readOnly = true)
+    public List<TaskOwnerSummary> findOwners() {
+        Map<Long, long[]> counts = new LinkedHashMap<>();
+        Map<Long, OwnerStatusCount> owners = new LinkedHashMap<>();
+        for (OwnerStatusCount row : tasks.countByOwnerAndStatus()) {
+            owners.putIfAbsent(row.getOwnerId(), row);
+            counts.computeIfAbsent(row.getOwnerId(), id -> new long[TaskStatus.values().length])[row.getStatus().ordinal()] =
+                    row.getCount();
+        }
+        return owners.values().stream()
+                .map(o -> {
+                    long[] c = counts.get(o.getOwnerId());
+                    return new TaskOwnerSummary(o.getOwnerId(), o.getFullName(), o.getEmail(),
+                            c[TaskStatus.TODO.ordinal()], c[TaskStatus.IN_PROGRESS.ordinal()], c[TaskStatus.DONE.ordinal()]);
+                })
+                .sorted(Comparator.comparing(TaskOwnerSummary::fullName, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    /** Read-only view of another user's tasks. */
+    @Transactional(readOnly = true)
+    public List<TaskResponse> findByOwner(Long ownerId, TaskStatus status) {
+        User owner = users.findById(ownerId)
+                .orElseThrow(() -> new NotFoundException("User " + ownerId + " not found"));
+        return findAll(owner, status);
     }
 
     public TaskResponse create(User owner, TaskRequest request) {

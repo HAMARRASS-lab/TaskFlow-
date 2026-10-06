@@ -37,4 +37,14 @@ describe('TaskCardComponent', () => {
     fixture.nativeElement.querySelector('[data-cy=edit-task]').click();
     expect(spy).toHaveBeenCalledWith(task);
   });
+
+  it('hides edit/delete and shows a status label when readonly', () => {
+    fixture.componentRef.setInput('readonly', true);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-cy=edit-task]')).toBeNull();
+    expect(el.querySelector('[data-cy=delete-task]')).toBeNull();
+    expect(el.querySelector('[data-cy=status-select]')).toBeNull();
+    expect(el.querySelector('[data-cy=task-status]')?.textContent).toContain('To do');
+  });
 });

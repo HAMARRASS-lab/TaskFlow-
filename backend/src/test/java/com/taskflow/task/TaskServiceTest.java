@@ -3,7 +3,10 @@ package com.taskflow.task;
 import com.taskflow.common.NotFoundException;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
+import com.taskflow.task.TaskDtos.TaskOwnerSummary;
+import com.taskflow.task.TaskRepository.OwnerStatusCount;
 import com.taskflow.user.User;
+import com.taskflow.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -11,6 +14,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,6 +27,9 @@ class TaskServiceTest {
 
     @Mock
     private TaskRepository repository;
+
+    @Mock
+    private UserRepository users;
 
     @InjectMocks
     private TaskService service;
@@ -74,5 +81,37 @@ class TaskServiceTest {
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("99");
         verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void findOwnersMergesStatusCountsPerUserSortedByName() {
+        when(repository.countByOwnerAndStatus()).thenReturn(List.of(
+                row(2L, "zoe", TaskStatus.DONE, 3),
+                row(1L, "Alice", TaskStatus.TODO, 2),
+                row(2L, "zoe", TaskStatus.TODO, 1),
+                row(1L, "Alice", TaskStatus.IN_PROGRESS, 1)));
+
+        List<TaskOwnerSummary> owners = service.findOwners();
+
+        assertThat(owners).extracting(TaskOwnerSummary::fullName).containsExactly("Alice", "zoe");
+        assertThat(owners.get(0)).isEqualTo(new TaskOwnerSummary(1L, "Alice", "alice@test.com", 2, 1, 0));
+        assertThat(owners.get(1).total()).isEqualTo(4);
+    }
+
+    @Test
+    void findByOwnerThrowsForUnknownUser() {
+        when(users.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.findByOwner(99L, null)).isInstanceOf(NotFoundException.class);
+    }
+
+    private static OwnerStatusCount row(Long id, String name, TaskStatus status, long count) {
+        return new OwnerStatusCount() {
+            public Long getOwnerId() { return id; }
+            public String getFullName() { return name; }
+            public String getEmail() { return id == 1L ? "alice@test.com" : "zoe@test.com"; }
+            public TaskStatus getStatus() { return status; }
+            public long getCount() { return count; }
+        };
     }
 }

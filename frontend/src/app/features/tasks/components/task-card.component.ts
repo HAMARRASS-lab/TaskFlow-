@@ -20,21 +20,27 @@ import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus } from '../task.models';
           </span>
         }
         <span class="spacer"></span>
-        <button mat-icon-button class="icon-btn" (click)="edit.emit(task)" aria-label="Edit" data-cy="edit-task">
-          <mat-icon>edit</mat-icon>
-        </button>
-        <button mat-icon-button class="icon-btn delete" (click)="remove.emit(task.id)" aria-label="Delete" data-cy="delete-task">
-          <mat-icon>delete_outline</mat-icon>
-        </button>
+        @if (!readonly) {
+          <button mat-icon-button class="icon-btn" (click)="edit.emit(task)" aria-label="Edit" data-cy="edit-task">
+            <mat-icon>edit</mat-icon>
+          </button>
+          <button mat-icon-button class="icon-btn delete" (click)="remove.emit(task.id)" aria-label="Delete" data-cy="delete-task">
+            <mat-icon>delete_outline</mat-icon>
+          </button>
+        }
       </div>
       <h3 class="title">{{ task.title }}</h3>
       @if (task.description) { <p class="desc">{{ task.description }}</p> }
       <div class="bottom">
+        @if (readonly) {
+          <span class="status static" [attr.data-status]="task.status" data-cy="task-status">{{ labels[task.status] }}</span>
+        } @else {
         <mat-select class="status" [attr.data-status]="task.status" [value]="task.status"
                     (selectionChange)="statusChange.emit($event.value)" aria-label="Status" data-cy="status-select"
                     panelWidth="">
           @for (s of statuses; track s) { <mat-option [value]="s">{{ labels[s] }}</mat-option> }
         </mat-select>
+        }
       </div>
     </article>
   `,
@@ -80,6 +86,7 @@ import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus } from '../task.models';
       width: auto; min-width: 128px; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 500;
       --mat-select-enabled-trigger-text-color: currentColor; --mat-select-enabled-arrow-color: currentColor;
     }
+    .status.static { min-width: 0; }
     .status[data-status='TODO'] { background: #f1f5f9; color: #475569; }
     .status[data-status='IN_PROGRESS'] { background: #fef3c7; color: #b45309; }
     .status[data-status='DONE'] { background: #d1fae5; color: #047857; }
@@ -87,6 +94,8 @@ import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus } from '../task.models';
 })
 export class TaskCardComponent {
   @Input({ required: true }) task!: Task;
+  /** Hides edit/delete and shows the status as a label (viewing someone else's tasks). */
+  @Input() readonly = false;
   @Output() statusChange = new EventEmitter<TaskStatus>();
   @Output() edit = new EventEmitter<Task>();
   @Output() remove = new EventEmitter<number>();

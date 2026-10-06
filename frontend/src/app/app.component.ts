@@ -28,6 +28,9 @@ import { meetingsFeature } from './features/meetings/store/meetings.reducer';
               <span class="badge" [attr.aria-label]="count + ' pending invitations'" data-cy="invitations-badge">{{ count }}</span>
             }
           </a>
+          <a routerLink="/team" routerLinkActive="active" data-cy="nav-team">
+            <mat-icon>group</mat-icon><span>Team</span>
+          </a>
         </nav>
       }
       <span class="spacer"></span>

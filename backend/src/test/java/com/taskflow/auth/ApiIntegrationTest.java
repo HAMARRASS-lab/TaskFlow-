@@ -205,6 +205,48 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.participants[0].status").value("ACCEPTED"));
     }
 
+    @Test
+    void listsTaskOwnersAndTheirTasksReadOnly() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String author = register("author-" + suffix + "@test.com", "Ada Author " + suffix);
+        String viewer = register("viewer-" + suffix + "@test.com", "Victor Viewer " + suffix);
+
+        String created = mvc.perform(post("/api/tasks").header("Authorization", author)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Shared work\",\"status\":\"DONE\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long taskId = json.readTree(created).get("id").asLong();
+
+        // the author is listed with counts; the viewer (no tasks) is not
+        String owners = mvc.perform(get("/api/users/task-owners").header("Authorization", viewer))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode ada = null;
+        for (JsonNode o : json.readTree(owners)) {
+            if (o.get("fullName").asText().equals("Ada Author " + suffix)) ada = o;
+            if (o.get("fullName").asText().equals("Victor Viewer " + suffix)) throw new AssertionError("viewer listed");
+        }
+        org.assertj.core.api.Assertions.assertThat(ada).isNotNull();
+        org.assertj.core.api.Assertions.assertThat(ada.get("done").asLong()).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(ada.get("total").asLong()).isEqualTo(1);
+
+        // the viewer can read the author's tasks, with a status filter
+        mvc.perform(get("/api/users/{id}/tasks", ada.get("id").asLong()).header("Authorization", viewer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].title").value("Shared work"));
+        mvc.perform(get("/api/users/{id}/tasks", ada.get("id").asLong()).header("Authorization", viewer)
+                        .param("status", "TODO"))
+                .andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/users/{id}/tasks", 999_999).header("Authorization", viewer))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/users/task-owners")).andExpect(status().isUnauthorized());
+
+        // ...but still can't modify them
+        mvc.perform(delete("/api/tasks/{id}", taskId).header("Authorization", viewer))
+                .andExpect(status().isNotFound());
+    }
+
     private String register(String email, String fullName) throws Exception {
         String body = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"%s\"}"

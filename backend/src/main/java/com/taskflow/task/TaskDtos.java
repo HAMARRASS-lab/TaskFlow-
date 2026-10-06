@@ -38,4 +38,12 @@ public final class TaskDtos {
                     task.getPriority(), task.getDueDate(), task.getCreatedAt(), task.getUpdatedAt());
         }
     }
+
+    public record TaskOwnerSummary(Long id, String fullName, String email, long todo, long inProgress, long done,
+                                   long total) {
+
+        public TaskOwnerSummary(Long id, String fullName, String email, long todo, long inProgress, long done) {
+            this(id, fullName, email, todo, inProgress, done, todo + inProgress + done);
+        }
+    }
 }

@@ -23,5 +23,15 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./features/meetings/calendar.component').then((m) => m.CalendarComponent),
   },
+  {
+    path: 'team',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/team/team.component').then((m) => m.TeamComponent),
+  },
+  {
+    path: 'team/:userId',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/team/team.component').then((m) => m.TeamComponent),
+  },
   { path: '**', redirectTo: 'tasks' },
 ];

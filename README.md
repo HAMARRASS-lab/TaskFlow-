@@ -65,6 +65,8 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | PUT | `/api/tasks/{id}` | update |
 | PATCH | `/api/tasks/{id}/status` | `{status}` |
 | DELETE | `/api/tasks/{id}` | delete |
+| GET | `/api/users/task-owners` | users who created at least one task, with `todo/inProgress/done/total` counts |
+| GET | `/api/users/{id}/tasks?status=` | that user's tasks, read-only (404 if the user doesn't exist) |
 | GET | `/api/meetings?from=&to=` | meetings I organize or am invited to, overlapping `[from, to)` (ISO local date-times, optional) |
 | GET | `/api/meetings/invitations` | upcoming meetings shared with me that I have not answered |
 | GET | `/api/meetings/{id}` | one meeting |
@@ -73,7 +75,7 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | PATCH | `/api/meetings/{id}/response` | invitee answers `{status: ACCEPTED \| DECLINED}` — 409 if accepting overlaps their agenda |
 | DELETE | `/api/meetings/{id}` | delete (organizer only) |
 
-All `/api/tasks` and `/api/meetings` endpoints require `Authorization: Bearer <token>`.
+All `/api/tasks`, `/api/users` and `/api/meetings` endpoints require `Authorization: Bearer <token>`.
 
 **Meeting sharing** — a participant whose email matches a registered user sees the meeting in their calendar (read-only) and can accept or decline it. Other participants (plain names, unknown emails) are informational. Double-booking is checked against the meetings a user organizes or has accepted.
 
