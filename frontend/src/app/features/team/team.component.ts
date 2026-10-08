@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { Store } from '@ngrx/store';
@@ -8,6 +9,7 @@ import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
 import { TaskCardComponent } from '../tasks/components/task-card.component';
 import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter } from '../tasks/task.models';
+import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 import { TaskOwner, TeamService } from './team.service';
 
 @Component({
@@ -58,7 +60,11 @@ import { TaskOwner, TeamService } from './team.service';
             @if (loadingTasks()) { <mat-progress-bar mode="indeterminate" class="loading" /> }
             <div class="grid">
               @for (task of visibleTasks(); track task.id) {
-                <app-task-card [task]="task" [readonly]="true" />
+                <app-task-card [task]="task" [readonly]="true" class="clickable" role="button" tabindex="0"
+                               [attr.aria-label]="'Show details of ' + task.title"
+                               (click)="openDetails(task, owner.fullName)"
+                               (keydown.enter)="openDetails(task, owner.fullName)"
+                               (keydown.space)="$event.preventDefault(); openDetails(task, owner.fullName)" />
               } @empty {
                 @if (!loadingTasks()) { <p class="empty muted" data-cy="empty">No tasks here.</p> }
               }
@@ -111,6 +117,8 @@ import { TaskOwner, TeamService } from './team.service';
     .loading { margin-bottom: 12px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
     .empty { grid-column: 1 / -1; }
+    .clickable { cursor: pointer; border-radius: var(--tf-radius); }
+    .clickable:focus-visible { outline: 2px solid var(--tf-accent); outline-offset: 2px; }
     .placeholder {
       display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 240px;
       border: 1px dashed var(--tf-border); border-radius: var(--tf-radius); color: var(--tf-muted);
@@ -122,6 +130,7 @@ import { TaskOwner, TeamService } from './team.service';
 })
 export class TeamComponent implements OnInit {
   private readonly team = inject(TeamService);
+  private readonly dialog = inject(MatDialog);
   readonly me = inject(Store).selectSignal(authFeature.selectUser);
 
   readonly statuses = TASK_STATUSES;
@@ -167,6 +176,14 @@ export class TeamComponent implements OnInit {
 
   initials(name: string): string {
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+  }
+
+  openDetails(task: Task, ownerName: string): void {
+    this.dialog.open<TaskDetailDialogComponent, TaskDetailData>(TaskDetailDialogComponent, {
+      data: { task, ownerName },
+      width: '520px',
+      maxWidth: '95vw',
+    });
   }
 
   private loadTasks(id: number): void {

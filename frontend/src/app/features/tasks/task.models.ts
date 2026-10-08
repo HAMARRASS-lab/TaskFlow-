@@ -29,3 +29,11 @@ export interface TaskRequest {
   priority?: TaskPriority;
   dueDate?: string | null;
 }
+
+/** True when the task has a due date before today and is not done. */
+export function isOverdue(task: Pick<Task, 'dueDate' | 'status'>): boolean {
+  if (!task.dueDate || task.status === 'DONE') return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(task.dueDate + 'T00:00:00') < today;
+}

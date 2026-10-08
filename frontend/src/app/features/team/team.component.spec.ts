@@ -3,8 +3,10 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { MatDialog } from '@angular/material/dialog';
 import { provideMockStore } from '@ngrx/store/testing';
 import { authFeature } from '../../core/auth/store/auth.reducer';
+import { TaskDetailDialogComponent } from './task-detail-dialog.component';
 import { TeamComponent } from './team.component';
 
 describe('TeamComponent', () => {
@@ -58,5 +60,19 @@ describe('TeamComponent', () => {
     const cards = el.querySelectorAll('[data-cy=task-card]');
     expect(cards.length).toBe(1);
     expect(cards[0].textContent).toContain('Ship');
+  });
+
+  it('opens the task details when a card is clicked', () => {
+    const open = jest.spyOn(TestBed.inject(MatDialog), 'open');
+    const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' };
+    fixture.componentRef.setInput('userId', '1');
+    fixture.detectChanges();
+    http.expectOne('/api/users/1/tasks').flush([task]);
+    fixture.detectChanges();
+
+    fixture.nativeElement.querySelector('app-task-card').click();
+    expect(open).toHaveBeenCalledWith(TaskDetailDialogComponent, expect.objectContaining({
+      data: { task, ownerName: 'Alice Martin' },
+    }));
   });
 });

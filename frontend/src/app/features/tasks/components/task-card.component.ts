@@ -3,7 +3,7 @@ import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus } from '../task.models';
+import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, isOverdue } from '../task.models';
 
 @Component({
   selector: 'app-task-card',
@@ -104,9 +104,6 @@ export class TaskCardComponent {
   readonly labels = STATUS_LABELS;
 
   get isOverdue(): boolean {
-    if (!this.task.dueDate || this.task.status === 'DONE') return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return new Date(this.task.dueDate + 'T00:00:00') < today;
+    return isOverdue(this.task);
   }
 }
