@@ -42,7 +42,7 @@ import { AdminUser, Role, UserRequest } from './admin.service';
       </mat-dialog-actions>
     </form>
   `,
-  styles: [`mat-form-field { margin-bottom: 4px; }`],
+  styles: [`mat-form-field { width: 100%; margin-bottom: 8px; }`],
 })
 export class UserFormDialogComponent {
   readonly data = inject<AdminUser | null>(MAT_DIALOG_DATA, { optional: true });
