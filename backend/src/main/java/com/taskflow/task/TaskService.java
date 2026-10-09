@@ -63,9 +63,7 @@ public class TaskService {
     /** Read-only view of another user's tasks. */
     @Transactional(readOnly = true)
     public List<TaskResponse> findByOwner(Long ownerId, TaskStatus status) {
-        User owner = users.findById(ownerId)
-                .orElseThrow(() -> new NotFoundException("User " + ownerId + " not found"));
-        return findAll(owner, status);
+        return findAll(loadUser(ownerId), status);
     }
 
     public TaskResponse create(User owner, TaskRequest request) {
@@ -73,6 +71,18 @@ public class TaskService {
         task.setOwner(owner);
         apply(task, request);
         return TaskResponse.from(tasks.save(task));
+    }
+
+    /** Admin: creates a task owned by (assigned to) another user. */
+    public TaskResponse createFor(Long userId, TaskRequest request) {
+        return create(loadUser(userId), request);
+    }
+
+    /** Admin: moves a task to another user. */
+    public TaskResponse reassign(Long id, Long userId) {
+        Task task = tasks.findById(id).orElseThrow(() -> new NotFoundException("Task " + id + " not found"));
+        task.setOwner(loadUser(userId));
+        return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
     public TaskResponse update(User owner, Long id, TaskRequest request) {
@@ -89,6 +99,10 @@ public class TaskService {
 
     public void delete(User owner, Long id) {
         tasks.delete(load(owner, id));
+    }
+
+    private User loadUser(Long id) {
+        return users.findById(id).orElseThrow(() -> new NotFoundException("User " + id + " not found"));
     }
 
     private Task load(User owner, Long id) {

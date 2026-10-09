@@ -31,6 +31,11 @@ import { meetingsFeature } from './features/meetings/store/meetings.reducer';
           <a routerLink="/team" routerLinkActive="active" data-cy="nav-team">
             <mat-icon>group</mat-icon><span>Team</span>
           </a>
+          @if (isAdmin()) {
+            <a routerLink="/admin" routerLinkActive="active" data-cy="nav-admin">
+              <mat-icon>admin_panel_settings</mat-icon><span>Admin</span>
+            </a>
+          }
         </nav>
       }
       <span class="spacer"></span>
@@ -83,6 +88,8 @@ export class AppComponent {
   readonly user$ = this.store.select(authFeature.selectUser);
   private readonly invitations = this.store.selectSignal(meetingsFeature.selectInvitations);
   readonly invitationCount = computed(() => this.invitations().length);
+  private readonly user = this.store.selectSignal(authFeature.selectUser);
+  readonly isAdmin = computed(() => this.user()?.role === 'ADMIN');
 
   initials(name: string): string {
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');

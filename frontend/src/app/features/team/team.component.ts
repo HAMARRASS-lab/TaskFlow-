@@ -4,6 +4,7 @@ import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { Store } from '@ngrx/store';
 import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
@@ -11,6 +12,7 @@ import { TaskCardComponent } from '../tasks/components/task-card.component';
 import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter } from '../tasks/task.models';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 import { TaskOwner, TeamService } from './team.service';
+import { AdminService, AdminUser } from '../admin/admin.service';
 
 @Component({
   selector: 'app-team',
@@ -62,9 +64,9 @@ import { TaskOwner, TeamService } from './team.service';
               @for (task of visibleTasks(); track task.id) {
                 <app-task-card [task]="task" [readonly]="true" class="clickable" role="button" tabindex="0"
                                [attr.aria-label]="'Show details of ' + task.title"
-                               (click)="openDetails(task, owner.fullName)"
-                               (keydown.enter)="openDetails(task, owner.fullName)"
-                               (keydown.space)="$event.preventDefault(); openDetails(task, owner.fullName)" />
+                               (click)="openDetails(task, owner)"
+                               (keydown.enter)="openDetails(task, owner)"
+                               (keydown.space)="$event.preventDefault(); openDetails(task, owner)" />
               } @empty {
                 @if (!loadingTasks()) { <p class="empty muted" data-cy="empty">No tasks here.</p> }
               }
@@ -130,8 +132,12 @@ import { TaskOwner, TeamService } from './team.service';
 })
 export class TeamComponent implements OnInit {
   private readonly team = inject(TeamService);
+  private readonly admin = inject(AdminService);
   private readonly dialog = inject(MatDialog);
+  private readonly snackBar = inject(MatSnackBar);
   readonly me = inject(Store).selectSignal(authFeature.selectUser);
+  /** All users, loaded on first use by admins to reassign tasks. */
+  private allUsers: AdminUser[] | null = null;
 
   readonly statuses = TASK_STATUSES;
   readonly labels = STATUS_LABELS;
@@ -162,6 +168,10 @@ export class TeamComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.loadOwners();
+  }
+
+  private loadOwners(): void {
     this.team.getOwners().subscribe({
       next: (owners) => {
         this.owners.set(owners);
@@ -178,11 +188,41 @@ export class TeamComponent implements OnInit {
     return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
   }
 
-  openDetails(task: Task, ownerName: string): void {
-    this.dialog.open<TaskDetailDialogComponent, TaskDetailData>(TaskDetailDialogComponent, {
-      data: { task, ownerName },
+  openDetails(task: Task, owner: TaskOwner): void {
+    if (this.me()?.role !== 'ADMIN') {
+      this.showDetails({ task, ownerName: owner.fullName });
+    } else if (this.allUsers) {
+      this.showDetails({ task, ownerName: owner.fullName, ownerId: owner.id, assignees: this.allUsers });
+    } else {
+      this.admin.getUsers().subscribe({
+        next: (users) => {
+          this.allUsers = users;
+          this.openDetails(task, owner);
+        },
+        error: () => this.showDetails({ task, ownerName: owner.fullName }),
+      });
+    }
+  }
+
+  private showDetails(data: TaskDetailData): void {
+    this.dialog.open<TaskDetailDialogComponent, TaskDetailData, number>(TaskDetailDialogComponent, {
+      data,
       width: '520px',
       maxWidth: '95vw',
+    }).afterClosed().subscribe((userId) => {
+      if (userId) this.reassign(data.task, userId);
+    });
+  }
+
+  private reassign(task: Task, userId: number): void {
+    this.admin.reassignTask(task.id, userId).subscribe({
+      next: () => {
+        const name = this.allUsers?.find((u) => u.id === userId)?.fullName ?? 'user';
+        this.snackBar.open(`"${task.title}" reassigned to ${name}`, 'Close', { duration: 3000 });
+        this.tasks.update((tasks) => tasks.filter((t) => t.id !== task.id));
+        this.loadOwners();
+      },
+      error: (e) => this.snackBar.open(errorMessage(e), 'Close', { duration: 5000 }),
     });
   }
 

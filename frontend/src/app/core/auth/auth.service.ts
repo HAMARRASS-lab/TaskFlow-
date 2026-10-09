@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_URL } from '../api';
-import { AuthResponse, LoginRequest, RegisterRequest, StoredSession } from './auth.models';
+import { AuthResponse, LoginRequest, RegisterRequest, StoredSession, User } from './auth.models';
 
 const STORAGE_KEY = 'taskflow.auth';
 
@@ -18,6 +18,10 @@ export class AuthService {
     return this.http.post<AuthResponse>(`${API_URL}/auth/register`, request);
   }
 
+  me(): Observable<User> {
+    return this.http.get<User>(`${API_URL}/auth/me`);
+  }
+
   saveSession(response: AuthResponse): void {
     const session: StoredSession = {
       token: response.token,
@@ -25,6 +29,12 @@ export class AuthService {
       user: response.user,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }
+
+  /** Keeps the stored token, replacing the cached user (e.g. after a role change). */
+  updateStoredUser(user: User): void {
+    const session = this.getSession();
+    if (session) localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...session, user }));
   }
 
   clearSession(): void {

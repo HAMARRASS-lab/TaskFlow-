@@ -1,11 +1,13 @@
 package com.taskflow.auth;
 
+import com.taskflow.admin.AdminBootstrap;
 import com.taskflow.auth.AuthDtos.AuthResponse;
 import com.taskflow.auth.AuthDtos.LoginRequest;
 import com.taskflow.auth.AuthDtos.RegisterRequest;
 import com.taskflow.auth.AuthDtos.UserResponse;
 import com.taskflow.common.ConflictException;
 import com.taskflow.security.JwtService;
+import com.taskflow.user.Role;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -21,13 +23,16 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final AdminBootstrap adminBootstrap;
 
     public AuthService(UserRepository users, PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager, JwtService jwtService) {
+                       AuthenticationManager authenticationManager, JwtService jwtService,
+                       AdminBootstrap adminBootstrap) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.jwtService = jwtService;
+        this.adminBootstrap = adminBootstrap;
     }
 
     @Transactional
@@ -35,10 +40,14 @@ public class AuthService {
         if (users.existsByEmailIgnoreCase(request.email())) {
             throw new ConflictException("Email already registered");
         }
-        User user = users.save(new User(
+        User user = new User(
                 request.email().toLowerCase(),
                 passwordEncoder.encode(request.password()),
-                request.fullName()));
+                request.fullName());
+        if (adminBootstrap.isAdminEmail(user.getEmail())) {
+            user.setRole(Role.ADMIN);
+        }
+        user = users.save(user);
         return toResponse(user);
     }
 
