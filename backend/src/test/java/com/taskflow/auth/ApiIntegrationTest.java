@@ -247,6 +247,67 @@ class ApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void adminManagesUsersAndAssignsTasks() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String admin = register("ADMIN@test.com", "Root Admin");
+        String user = register("plain-" + suffix + "@test.com", "Paula Plain");
+
+        // the configured email is promoted on registration; others stay USER and are kept out
+        mvc.perform(get("/api/auth/me").header("Authorization", admin))
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+        mvc.perform(get("/api/admin/users").header("Authorization", user)).andExpect(status().isForbidden());
+
+        String created = mvc.perform(post("/api/admin/users").header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"New-%s@test.com\",\"password\":\"password123\",\"fullName\":\"Nina New\"}"
+                                .formatted(suffix)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("new-" + suffix + "@test.com"))
+                .andExpect(jsonPath("$.role").value("USER"))
+                .andReturn().getResponse().getContentAsString();
+        long ninaId = json.readTree(created).get("id").asLong();
+
+        mvc.perform(put("/api/admin/users/{id}", ninaId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"nina-%s@test.com\",\"fullName\":\"Nina Lead\",\"role\":\"ADMIN\",\"password\":\"\"}"
+                                .formatted(suffix)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fullName").value("Nina Lead"))
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+        // the password was kept
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"nina-%s@test.com\",\"password\":\"password123\"}".formatted(suffix)))
+                .andExpect(status().isOk());
+
+        // assign a new task to Nina, then move it to Paula
+        String task = mvc.perform(post("/api/admin/users/{id}/tasks", ninaId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Assigned work\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long taskId = json.readTree(task).get("id").asLong();
+        long paulaId = json.readTree(mvc.perform(get("/api/auth/me").header("Authorization", user))
+                .andReturn().getResponse().getContentAsString()).get("id").asLong();
+
+        mvc.perform(patch("/api/admin/tasks/{id}/assignee", taskId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":%d}".formatted(paulaId)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/tasks/{id}", taskId).header("Authorization", user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Assigned work"));
+
+        // an admin can't delete themselves; deleting a user removes their tasks
+        long adminId = json.readTree(mvc.perform(get("/api/auth/me").header("Authorization", admin))
+                .andReturn().getResponse().getContentAsString()).get("id").asLong();
+        mvc.perform(delete("/api/admin/users/{id}", adminId).header("Authorization", admin))
+                .andExpect(status().isBadRequest());
+        mvc.perform(delete("/api/admin/users/{id}", paulaId).header("Authorization", admin))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/tasks").header("Authorization", user)).andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/users/{id}/tasks", paulaId).header("Authorization", admin))
+                .andExpect(status().isNotFound());
+    }
+
     private String register(String email, String fullName) throws Exception {
         String body = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"%s\"}"

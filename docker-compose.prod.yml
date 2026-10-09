@@ -29,6 +29,7 @@ services:
       DB_USER: taskflow
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-h.hamarrass1@gmail.com}
       JAVA_OPTS: -XX:MaxRAMPercentage=50
 
   frontend:

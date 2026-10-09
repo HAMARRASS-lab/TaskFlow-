@@ -74,8 +74,16 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | PUT | `/api/meetings/{id}` | update (organizer only, else 403) — rescheduling resets answers to `PENDING` |
 | PATCH | `/api/meetings/{id}/response` | invitee answers `{status: ACCEPTED \| DECLINED}` — 409 if accepting overlaps their agenda |
 | DELETE | `/api/meetings/{id}` | delete (organizer only) |
+| GET | `/api/admin/users` | **admin** — all users |
+| POST | `/api/admin/users` | **admin** — create `{email, password, fullName, role?}` |
+| PUT | `/api/admin/users/{id}` | **admin** — update `{email, fullName, role, password?}` (empty password keeps it; can't remove your own admin role) |
+| DELETE | `/api/admin/users/{id}` | **admin** — delete a user and their tasks/meetings (not yourself) |
+| POST | `/api/admin/users/{id}/tasks` | **admin** — create a task assigned to that user |
+| PATCH | `/api/admin/tasks/{id}/assignee` | **admin** — reassign a task `{userId}` |
 
-All `/api/tasks`, `/api/users` and `/api/meetings` endpoints require `Authorization: Bearer <token>`.
+All `/api/tasks`, `/api/users` and `/api/meetings` endpoints require `Authorization: Bearer <token>`; `/api/admin/**` also requires the `ADMIN` role (403 otherwise).
+
+**Admins** — the emails in `ADMIN_EMAILS` get the `ADMIN` role at startup (existing accounts) and when they register. Admins see an **Admin** page (add / edit / delete users, assign a new task to someone) and can reassign any task from the Team page.
 
 **Meeting sharing** — a participant whose email matches a registered user sees the meeting in their calendar (read-only) and can accept or decline it. Other participants (plain names, unknown emails) are informational. Double-booking is checked against the meetings a user organizes or has accepted.
 
@@ -88,6 +96,7 @@ All `/api/tasks`, `/api/users` and `/api/meetings` endpoints require `Authorizat
 | `JWT_EXPIRATION_MS` | `86400000` (24 h) |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:4200` |
 | `PORT` | `8080` |
+| `ADMIN_EMAILS` | `h.hamarrass1@gmail.com` (comma-separated) |
 
 ## CI
 

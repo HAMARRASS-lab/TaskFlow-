@@ -1,20 +1,26 @@
 import { Component, inject } from '@angular/core';
 import { DatePipe } from '@angular/common';
-import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { FormsModule } from '@angular/forms';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatSelectModule } from '@angular/material/select';
 import { STATUS_LABELS, Task, isOverdue } from '../tasks/task.models';
 
 export interface TaskDetailData {
   task: Task;
   ownerName: string;
+  /** Admins only: users the task can be reassigned to. The dialog then closes with the chosen user id. */
+  assignees?: { id: number; fullName: string }[];
+  ownerId?: number;
 }
 
-/** Read-only view of a teammate's task, opened from the Team page. */
+/** Read-only view of a teammate's task, opened from the Team page (admins can reassign it). */
 @Component({
   selector: 'app-task-detail-dialog',
   standalone: true,
-  imports: [DatePipe, MatDialogModule, MatButtonModule, MatIconModule],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule],
   template: `
     <h2 mat-dialog-title data-cy="detail-title">{{ task.title }}</h2>
     <mat-dialog-content>
@@ -38,9 +44,22 @@ export interface TaskDetailData {
         <dt>Created</dt><dd>{{ task.createdAt | date: 'MMM d, y, HH:mm' }}</dd>
         <dt>Last updated</dt><dd>{{ task.updatedAt | date: 'MMM d, y, HH:mm' }}</dd>
       </dl>
+
+      @if (data.assignees; as assignees) {
+        <mat-form-field appearance="outline" class="assign" subscriptSizing="dynamic">
+          <mat-label>Assign to</mat-label>
+          <mat-select [(ngModel)]="assigneeId" data-cy="detail-assignee">
+            @for (u of assignees; track u.id) { <mat-option [value]="u.id">{{ u.fullName }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close data-cy="detail-close">Close</button>
+      @if (data.assignees) {
+        <button mat-flat-button color="primary" [disabled]="!assigneeId || assigneeId === data.ownerId"
+                (click)="reassign()" data-cy="detail-reassign">Reassign</button>
+      }
     </mat-dialog-actions>
   `,
   styles: [`
@@ -66,6 +85,7 @@ export interface TaskDetailData {
     dt { color: var(--tf-muted); }
     dd { margin: 0; color: var(--tf-text); }
     dd.overdue { color: var(--tf-high); font-weight: 500; }
+    .assign { width: 100%; margin-top: 20px; }
   `],
 })
 export class TaskDetailDialogComponent {
@@ -73,4 +93,10 @@ export class TaskDetailDialogComponent {
   readonly task = this.data.task;
   readonly labels = STATUS_LABELS;
   readonly overdue = isOverdue(this.task);
+  private readonly dialogRef = inject(MatDialogRef<TaskDetailDialogComponent, number>, { optional: true });
+  assigneeId = this.data.ownerId;
+
+  reassign(): void {
+    if (this.assigneeId && this.assigneeId !== this.data.ownerId) this.dialogRef?.close(this.assigneeId);
+  }
 }

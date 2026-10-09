@@ -14,4 +14,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     /** Emails are stored lower-cased. */
     List<User> findByEmailIn(Collection<String> emails);
+
+    List<User> findAllByOrderByFullNameAsc();
 }

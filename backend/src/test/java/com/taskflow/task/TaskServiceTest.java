@@ -105,6 +105,33 @@ class TaskServiceTest {
         assertThatThrownBy(() -> service.findByOwner(99L, null)).isInstanceOf(NotFoundException.class);
     }
 
+    @Test
+    void reassignMovesTaskToAnotherUser() {
+        User bob = new User("bob@test.com", "hash", "Bob");
+        bob.setId(2L);
+        Task task = new Task();
+        task.setId(7L);
+        task.setTitle("Review");
+        task.setOwner(owner);
+        when(repository.findById(7L)).thenReturn(Optional.of(task));
+        when(users.findById(2L)).thenReturn(Optional.of(bob));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        service.reassign(7L, 2L);
+
+        assertThat(task.getOwner()).isSameAs(bob);
+    }
+
+    @Test
+    void createForAssignsTaskToTheGivenUser() {
+        when(users.findById(1L)).thenReturn(Optional.of(owner));
+        when(repository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createFor(1L, new TaskRequest("Onboard", null, null, null, null));
+
+        verify(repository).save(argThat(t -> t.getOwner() == owner && t.getTitle().equals("Onboard")));
+    }
+
     private static OwnerStatusCount row(Long id, String name, TaskStatus status, long count) {
         return new OwnerStatusCount() {
             public Long getOwnerId() { return id; }

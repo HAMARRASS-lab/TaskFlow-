@@ -1,13 +1,16 @@
 import { TestBed } from '@angular/core/testing';
-import { MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 
 describe('TaskDetailDialogComponent', () => {
+  const close = jest.fn();
+
   function render(data: TaskDetailData): HTMLElement {
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data }],
+      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+        { provide: MatDialogRef, useValue: { close } }],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);
     fixture.detectChanges();
@@ -33,5 +36,28 @@ describe('TaskDetailDialogComponent', () => {
     expect(el.textContent).toContain('No description.');
     expect(el.textContent).toContain('None');
     expect(el.textContent).not.toContain('Overdue');
+  });
+
+  it('hides reassignment for non-admins', () => {
+    const el = render({ task, ownerName: 'Bob' });
+    expect(el.querySelector('[data-cy=detail-reassign]')).toBeNull();
+  });
+
+  it('lets an admin reassign the task to another user', () => {
+    const data = { task, ownerName: 'Alice', ownerId: 1, assignees: [{ id: 1, fullName: 'Alice' }, { id: 2, fullName: 'Bob' }] };
+    TestBed.configureTestingModule({
+      imports: [TaskDetailDialogComponent],
+      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+        { provide: MatDialogRef, useValue: { close } }],
+    });
+    const fixture = TestBed.createComponent(TaskDetailDialogComponent);
+    fixture.detectChanges();
+    const button = () => fixture.nativeElement.querySelector('[data-cy=detail-reassign]') as HTMLButtonElement;
+    expect(button().disabled).toBe(true);
+
+    fixture.componentInstance.assigneeId = 2;
+    fixture.detectChanges();
+    button().click();
+    expect(close).toHaveBeenCalledWith(2);
   });
 });
