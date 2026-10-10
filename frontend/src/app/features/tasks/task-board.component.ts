@@ -9,6 +9,8 @@ import { Store } from '@ngrx/store';
 import { filter } from 'rxjs';
 import { TaskCardComponent } from './components/task-card.component';
 import { TaskFormDialogComponent } from './components/task-form-dialog.component';
+import { TaskQueryBarComponent } from './components/task-query-bar.component';
+import { TaskQuery } from './task-query';
 import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, TaskRequest, TaskStatus } from './task.models';
 import { TasksActions } from './store/tasks.actions';
 import { tasksFeature } from './store/tasks.reducer';
@@ -16,7 +18,8 @@ import { tasksFeature } from './store/tasks.reducer';
 @Component({
   selector: 'app-task-board',
   standalone: true,
-  imports: [AsyncPipe, DatePipe, MatButtonModule, MatButtonToggleModule, MatIconModule, MatProgressBarModule, TaskCardComponent],
+  imports: [AsyncPipe, DatePipe, MatButtonModule, MatButtonToggleModule, MatIconModule, MatProgressBarModule, TaskCardComponent,
+            TaskQueryBarComponent],
   template: `
     <div class="page">
       <header class="head">
@@ -68,6 +71,9 @@ import { tasksFeature } from './store/tasks.reducer';
           }
         </mat-button-toggle-group>
       </div>
+      @if (query$ | async; as query) {
+        <app-task-query-bar class="query" [query]="query" (queryChange)="setQuery($event)" (reset)="resetQuery()" />
+      }
 
       @if (loading$ | async) { <mat-progress-bar mode="indeterminate" class="loading" /> }
 
@@ -78,12 +84,21 @@ import { tasksFeature } from './store/tasks.reducer';
                          (edit)="openForm($event)"
                          (remove)="remove($event)" />
         } @empty {
-          <div class="empty" data-cy="empty">
-            <span class="empty-icon"><mat-icon>checklist</mat-icon></span>
-            <h3>No tasks here yet</h3>
-            <p>Create a task to get started.</p>
-            <button mat-stroked-button (click)="openForm()"><mat-icon>add</mat-icon> New task</button>
-          </div>
+          @if (queryActive$ | async) {
+            <div class="empty" data-cy="no-match">
+              <span class="empty-icon"><mat-icon>search_off</mat-icon></span>
+              <h3>No tasks match your filters</h3>
+              <p>Try another search or clear the filters.</p>
+              <button mat-stroked-button (click)="resetQuery()"><mat-icon>filter_alt_off</mat-icon> Clear filters</button>
+            </div>
+          } @else {
+            <div class="empty" data-cy="empty">
+              <span class="empty-icon"><mat-icon>checklist</mat-icon></span>
+              <h3>No tasks here yet</h3>
+              <p>Create a task to get started.</p>
+              <button mat-stroked-button (click)="openForm()"><mat-icon>add</mat-icon> New task</button>
+            </div>
+          }
         }
       </div>
     </div>
@@ -118,7 +133,8 @@ import { tasksFeature } from './store/tasks.reducer';
     .track { height: 8px; border-radius: 99px; background: #eef0f4; overflow: hidden; }
     .fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, #6366f1, #10b981); transition: width .4s ease; }
 
-    .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+    .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .query { display: block; margin-bottom: 16px; }
     .toolbar mat-button-toggle-group { background: var(--tf-surface); border-color: var(--tf-border); }
     .loading { margin-bottom: 12px; border-radius: 99px; }
 
@@ -149,6 +165,8 @@ export class TaskBoardComponent implements OnInit {
   readonly stats$ = this.store.select(tasksFeature.selectStats);
   readonly filter$ = this.store.select(tasksFeature.selectFilter);
   readonly loading$ = this.store.select(tasksFeature.selectLoading);
+  readonly query$ = this.store.select(tasksFeature.selectQuery);
+  readonly queryActive$ = this.store.select(tasksFeature.selectQueryActive);
 
   readonly statuses = TASK_STATUSES;
   readonly labels = STATUS_LABELS;
@@ -164,6 +182,14 @@ export class TaskBoardComponent implements OnInit {
 
   setFilter(filter: TaskFilter): void {
     this.store.dispatch(TasksActions.setFilter({ filter }));
+  }
+
+  setQuery(query: Partial<TaskQuery>): void {
+    this.store.dispatch(TasksActions.setQuery({ query }));
+  }
+
+  resetQuery(): void {
+    this.store.dispatch(TasksActions.resetQuery());
   }
 
   changeStatus(id: number, status: TaskStatus): void {

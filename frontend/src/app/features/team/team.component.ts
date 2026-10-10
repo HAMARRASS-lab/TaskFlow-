@@ -9,6 +9,8 @@ import { Store } from '@ngrx/store';
 import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
 import { TaskCardComponent } from '../tasks/components/task-card.component';
+import { TaskQueryBarComponent } from '../tasks/components/task-query-bar.component';
+import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from '../tasks/task-query';
 import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter } from '../tasks/task.models';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 import { TaskOwner, TeamService } from './team.service';
@@ -17,7 +19,7 @@ import { AdminService, AdminUser } from '../admin/admin.service';
 @Component({
   selector: 'app-team',
   standalone: true,
-  imports: [RouterLink, MatButtonToggleModule, MatIconModule, MatProgressBarModule, TaskCardComponent],
+  imports: [RouterLink, MatButtonToggleModule, MatIconModule, MatProgressBarModule, TaskCardComponent, TaskQueryBarComponent],
   template: `
     <div class="page">
       <header class="head">
@@ -59,6 +61,7 @@ import { AdminService, AdminUser } from '../admin/admin.service';
                 }
               </mat-button-toggle-group>
             </div>
+            <app-task-query-bar class="query" [query]="query()" (queryChange)="patchQuery($event)" (reset)="resetQuery()" />
             @if (loadingTasks()) { <mat-progress-bar mode="indeterminate" class="loading" /> }
             <div class="grid">
               @for (task of visibleTasks(); track task.id) {
@@ -68,7 +71,13 @@ import { AdminService, AdminUser } from '../admin/admin.service';
                                (keydown.enter)="openDetails(task, owner)"
                                (keydown.space)="$event.preventDefault(); openDetails(task, owner)" />
               } @empty {
-                @if (!loadingTasks()) { <p class="empty muted" data-cy="empty">No tasks here.</p> }
+                @if (!loadingTasks()) {
+                  @if (queryActive() && tasks().length) {
+                    <p class="empty muted" data-cy="no-match">No tasks match your filters.</p>
+                  } @else {
+                    <p class="empty muted" data-cy="empty">No tasks here.</p>
+                  }
+                }
               }
             </div>
           } @else {
@@ -114,7 +123,8 @@ import { AdminService, AdminUser } from '../admin/admin.service';
       background: #f1f5f9; color: #475569; font-size: 12px; font-weight: 600;
     }
 
-    .tasks-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+    .tasks-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+    .query { display: block; margin-bottom: 16px; }
     .tasks-head h2 { margin: 0; font-size: 20px; font-weight: 700; }
     .loading { margin-bottom: 12px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
@@ -146,14 +156,16 @@ export class TeamComponent implements OnInit {
   readonly tasks = signal<Task[]>([]);
   readonly selectedId = signal<number | null>(null);
   readonly filter = signal<TaskFilter>('ALL');
+  readonly query = signal<TaskQuery>(DEFAULT_TASK_QUERY);
   readonly loadingOwners = signal(true);
   readonly loadingTasks = signal(false);
   readonly error = signal<string | null>(null);
 
   readonly selected = computed(() => this.owners().find((o) => o.id === this.selectedId()) ?? null);
+  readonly queryActive = computed(() => isQueryActive(this.query()));
   readonly visibleTasks = computed(() => {
     const f = this.filter();
-    return f === 'ALL' ? this.tasks() : this.tasks().filter((t) => t.status === f);
+    return applyTaskQuery(f === 'ALL' ? this.tasks() : this.tasks().filter((t) => t.status === f), this.query());
   });
 
   /** Bound from the `team/:userId` route parameter. */
@@ -163,6 +175,7 @@ export class TeamComponent implements OnInit {
     this.selectedId.set(id);
     this.error.set(null);
     this.filter.set('ALL');
+    this.query.set(DEFAULT_TASK_QUERY);
     this.tasks.set([]);
     if (id !== null) this.loadTasks(id);
   }
@@ -182,6 +195,14 @@ export class TeamComponent implements OnInit {
         this.loadingOwners.set(false);
       },
     });
+  }
+
+  patchQuery(change: Partial<TaskQuery>): void {
+    this.query.update((q) => ({ ...q, ...change }));
+  }
+
+  resetQuery(): void {
+    this.query.update((q) => ({ ...DEFAULT_TASK_QUERY, sort: q.sort }));
   }
 
   initials(name: string): string {

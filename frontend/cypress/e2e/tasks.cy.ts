@@ -16,6 +16,24 @@ describe('Task board', () => {
     cy.get('[data-cy=task-card]').should('have.length', 1).and('contain', 'Write Cypress tests');
   });
 
+  it('searches, filters by priority and sorts', () => {
+    cy.get('[data-cy=task-search]').type('jwt');
+    cy.get('[data-cy=task-card]').should('have.length', 1).and('contain', 'Implement JWT auth');
+
+    cy.get('[data-cy=clear-filters]').click();
+    cy.get('[data-cy=priority-filter]').click();
+    cy.get('mat-option').contains('LOW').click();
+    cy.get('[data-cy=task-card]').should('have.length', 1).and('contain', 'Write Cypress tests');
+
+    cy.get('[data-cy=task-search]').type('nothing matches');
+    cy.get('[data-cy=no-match]').should('be.visible').find('button').click();
+    cy.get('[data-cy=task-card]').should('have.length', 3);
+
+    cy.get('[data-cy=task-sort]').click();
+    cy.get('mat-option').contains('Title').click();
+    cy.get('[data-cy=task-card]').first().should('contain', 'Design database schema');
+  });
+
   it('creates a task', () => {
     cy.intercept('POST', '/api/tasks', (req) => {
       req.reply({

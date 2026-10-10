@@ -59,4 +59,17 @@ describe('tasks selectors', () => {
     expect(tasksFeature.selectFilteredTasks(filtered).map((t) => t.id)).toEqual([2, 3]);
     expect(tasksFeature.selectFilteredTasks(root)).toHaveLength(3);
   });
+
+  it('combines the status filter with the search query and sort', () => {
+    let s = reducer(state, TasksActions.setFilter({ filter: 'DONE' }));
+    s = reducer(s, TasksActions.setQuery({ query: { search: 'task 3' } }));
+    expect(tasksFeature.selectFilteredTasks({ tasks: s }).map((t) => t.id)).toEqual([3]);
+    expect(tasksFeature.selectQueryActive({ tasks: s })).toBe(true);
+
+    s = reducer(s, TasksActions.setQuery({ query: { sort: 'OLDEST' } }));
+    expect(s.query.search).toBe('task 3');
+    s = reducer(s, TasksActions.resetQuery());
+    expect(s.query).toEqual({ search: '', priority: 'ALL', due: 'ALL', sort: 'OLDEST' });
+    expect(tasksFeature.selectFilteredTasks({ tasks: s }).map((t) => t.id)).toEqual([3, 2]);
+  });
 });

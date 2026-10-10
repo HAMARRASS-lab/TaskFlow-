@@ -1,5 +1,6 @@
 import { createActionGroup, emptyProps, props } from '@ngrx/store';
 import { Task, TaskFilter, TaskRequest, TaskStatus } from '../task.models';
+import { TaskQuery } from '../task-query';
 
 export const TasksActions = createActionGroup({
   source: 'Tasks',
@@ -15,5 +16,7 @@ export const TasksActions = createActionGroup({
     'Delete Success': props<{ id: number }>(),
     'Request Failure': props<{ error: string }>(),
     'Set Filter': props<{ filter: TaskFilter }>(),
+    'Set Query': props<{ query: Partial<TaskQuery> }>(),
+    'Reset Query': emptyProps(),
   },
 });
