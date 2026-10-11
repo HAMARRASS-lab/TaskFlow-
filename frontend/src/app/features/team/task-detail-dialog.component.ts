@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
+import { TaskCommentsComponent } from '../tasks/comments/task-comments.component';
 import { STATUS_LABELS, Task, isOverdue } from '../tasks/task.models';
 
 export interface TaskDetailData {
@@ -20,7 +21,7 @@ export interface TaskDetailData {
 @Component({
   selector: 'app-task-detail-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent],
   template: `
     <h2 mat-dialog-title data-cy="detail-title">{{ task.title }}</h2>
     <mat-dialog-content>
@@ -44,6 +45,8 @@ export interface TaskDetailData {
         <dt>Created</dt><dd>{{ task.createdAt | date: 'MMM d, y, HH:mm' }}</dd>
         <dt>Last updated</dt><dd>{{ task.updatedAt | date: 'MMM d, y, HH:mm' }}</dd>
       </dl>
+
+      <app-task-comments [taskId]="task.id" />
 
       @if (data.assignees; as assignees) {
         <mat-form-field appearance="outline" class="assign" subscriptSizing="dynamic">

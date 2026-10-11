@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 
@@ -9,7 +11,7 @@ describe('TaskDetailDialogComponent', () => {
   function render(data: TaskDetailData): HTMLElement {
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+      providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: { close } }],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);
@@ -47,7 +49,7 @@ describe('TaskDetailDialogComponent', () => {
     const data = { task, ownerName: 'Alice', ownerId: 1, assignees: [{ id: 1, fullName: 'Alice' }, { id: 2, fullName: 'Bob' }] };
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+      providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: { close } }],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);

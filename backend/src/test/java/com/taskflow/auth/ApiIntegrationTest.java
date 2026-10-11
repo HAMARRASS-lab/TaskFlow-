@@ -308,6 +308,64 @@ class ApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void discussesTasksInCommentThreads() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String owner = register("own-" + suffix + "@test.com", "Owen Owner");
+        String teammate = register("mate-" + suffix + "@test.com", "Tara Teammate");
+        String outsider = register("out-" + suffix + "@test.com", "Oscar Out");
+
+        long taskId = json.readTree(mvc.perform(post("/api/tasks").header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Review PR\"}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString()).get("id").asLong();
+
+        // any user can join the thread; the body is trimmed and the author recorded
+        String created = mvc.perform(post("/api/tasks/{id}/comments", taskId).header("Authorization", teammate)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"  Left two remarks  \"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.body").value("Left two remarks"))
+                .andExpect(jsonPath("$.author.fullName").value("Tara Teammate"))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.canDelete").value(true))
+                .andReturn().getResponse().getContentAsString();
+        long commentId = json.readTree(created).get("id").asLong();
+        mvc.perform(post("/api/tasks/{id}/comments", taskId).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"Thanks, fixed\"}"))
+                .andExpect(status().isCreated());
+
+        // blank, unknown task, unauthenticated
+        mvc.perform(post("/api/tasks/{id}/comments", taskId).header("Authorization", teammate)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"body\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.body").exists());
+        mvc.perform(get("/api/tasks/{id}/comments", 999_999).header("Authorization", teammate))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/tasks/{id}/comments", taskId)).andExpect(status().isUnauthorized());
+
+        // oldest first, with per-viewer delete rights
+        mvc.perform(get("/api/tasks/{id}/comments", taskId).header("Authorization", outsider))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].body").value("Left two remarks"))
+                .andExpect(jsonPath("$[1].author.fullName").value("Owen Owner"))
+                .andExpect(jsonPath("$[0].canDelete").value(false));
+
+        // outsiders can't delete; the task owner can moderate
+        mvc.perform(delete("/api/tasks/{id}/comments/{cid}", taskId, commentId).header("Authorization", outsider))
+                .andExpect(status().isForbidden());
+        mvc.perform(delete("/api/tasks/{id}/comments/{cid}", taskId, commentId).header("Authorization", owner))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/tasks/{id}/comments", taskId).header("Authorization", owner))
+                .andExpect(jsonPath("$.length()").value(1));
+
+        // deleting the task removes its thread
+        mvc.perform(delete("/api/tasks/{id}", taskId).header("Authorization", owner))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/tasks/{id}/comments", taskId).header("Authorization", owner))
+                .andExpect(status().isNotFound());
+    }
+
     private String register(String email, String fullName) throws Exception {
         String body = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"%s\"}"

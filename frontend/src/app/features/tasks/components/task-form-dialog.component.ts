@@ -6,6 +6,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
+import { TaskCommentsComponent } from '../comments/task-comments.component';
 import { STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task, TaskPriority, TaskRequest, TaskStatus } from '../task.models';
 
 /** Formats a Date as YYYY-MM-DD in local time (what the API expects for LocalDate). */
@@ -19,7 +20,7 @@ export function toIsoDate(date: Date | null): string | null {
   selector: 'app-task-form-dialog',
   standalone: true,
   imports: [ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatDatepickerModule, MatButtonModule],
+    MatDatepickerModule, MatButtonModule, TaskCommentsComponent],
   template: `
     <h2 mat-dialog-title>{{ data ? 'Edit task' : 'New task' }}</h2>
     <form [formGroup]="form" (ngSubmit)="save()">
@@ -52,6 +53,7 @@ export function toIsoDate(date: Date | null): string | null {
           <mat-datepicker-toggle matIconSuffix [for]="picker" />
           <mat-datepicker #picker />
         </mat-form-field>
+        @if (data) { <app-task-comments [taskId]="data.id" /> }
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button type="button" mat-dialog-close>Cancel</button>
