@@ -1,5 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 
@@ -9,7 +11,7 @@ describe('TaskDetailDialogComponent', () => {
   function render(data: TaskDetailData): HTMLElement {
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+      providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: { close } }],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);
@@ -19,7 +21,9 @@ describe('TaskDetailDialogComponent', () => {
 
   const task = {
     id: 1, title: 'Design the onboarding flow', description: 'Line one\nLine two', status: 'IN_PROGRESS' as const,
-    priority: 'HIGH' as const, dueDate: '2000-01-01', createdAt: '2026-10-01T09:30:00', updatedAt: '2026-10-02T10:00:00',
+    priority: 'HIGH' as const, dueDate: '2000-01-01', labels: ['design', 'ux'],
+    checklist: [{ id: 1, title: 'Wireframes', done: true }, { id: 2, title: 'Copy', done: false }],
+    createdAt: '2026-10-01T09:30:00', updatedAt: '2026-10-02T10:00:00',
   };
 
   it('shows the full task with its owner and marks it overdue', () => {
@@ -29,6 +33,13 @@ describe('TaskDetailDialogComponent', () => {
     expect(el.querySelector('[data-cy=detail-status]')?.textContent).toContain('In progress');
     expect(el.querySelector('[data-cy=detail-owner]')?.textContent).toContain('Alice Martin');
     expect(el.textContent).toContain('Overdue');
+  });
+
+  it('shows labels and the checklist read-only', () => {
+    const el = render({ task, ownerName: 'Alice Martin' });
+    expect(Array.from(el.querySelectorAll('[data-cy=label-chip]')).map((c) => c.textContent)).toEqual(['design', 'ux']);
+    expect(el.textContent).toContain('Checklist · 1/2');
+    expect(el.querySelectorAll('[data-cy=detail-checklist] li.done')).toHaveLength(1);
   });
 
   it('handles a task without description or due date', () => {
@@ -47,7 +58,7 @@ describe('TaskDetailDialogComponent', () => {
     const data = { task, ownerName: 'Alice', ownerId: 1, assignees: [{ id: 1, fullName: 'Alice' }, { id: 2, fullName: 'Bob' }] };
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), { provide: MAT_DIALOG_DATA, useValue: data },
+      providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: MatDialogRef, useValue: { close } }],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);

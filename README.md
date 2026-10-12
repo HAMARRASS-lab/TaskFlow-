@@ -61,9 +61,10 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | GET | `/api/auth/me` | current user |
 | GET | `/api/tasks?status=TODO` | list my tasks (optional filter) |
 | GET | `/api/tasks/{id}` | one task |
-| POST | `/api/tasks` | create `{title, description?, status?, priority?, dueDate?}` |
-| PUT | `/api/tasks/{id}` | update |
+| POST | `/api/tasks` | create `{title, description?, status?, priority?, dueDate?, labels?, checklist?}` |
+| PUT | `/api/tasks/{id}` | update — `labels` / `checklist` replace the current ones; omit them to keep them |
 | PATCH | `/api/tasks/{id}/status` | `{status}` |
+| PATCH | `/api/tasks/{id}/checklist/{itemId}` | tick / untick a checklist item `{done}` |
 | DELETE | `/api/tasks/{id}` | delete |
 | GET | `/api/users/task-owners` | users who created at least one task, with `todo/inProgress/done/total` counts |
 | GET | `/api/users/{id}/tasks?status=` | that user's tasks, read-only (404 if the user doesn't exist) |
@@ -84,6 +85,8 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 All `/api/tasks`, `/api/users` and `/api/meetings` endpoints require `Authorization: Bearer <token>`; `/api/admin/**` also requires the `ADMIN` role (403 otherwise).
 
 **Admins** — the emails in `ADMIN_EMAILS` get the `ADMIN` role at startup (existing accounts) and when they register. Admins see an **Admin** page (add / edit / delete users, assign a new task to someone) and can reassign any task from the Team page.
+
+**Board, labels and checklists** — the task board opens as a Kanban (To do / In progress / Done): drag a card to another column to change its status (applied immediately, rolled back if the API refuses). A List view keeps the card grid with the status filter. Tasks carry up to 10 free-form labels (`labels: ["bug", "frontend"]`, stored trimmed and lower-cased, shown as coloured chips, filterable) and a checklist of up to 50 subtasks (`checklist: [{id?, title, done}]` — send an existing item's `id` to keep it), shown on the card as "3/5 done".
 
 **Meeting sharing** — a participant whose email matches a registered user sees the meeting in their calendar (read-only) and can accept or decline it. Other participants (plain names, unknown emails) are informational. Double-booking is checked against the meetings a user organizes or has accepted.
 

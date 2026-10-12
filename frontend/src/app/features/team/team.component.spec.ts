@@ -45,8 +45,8 @@ describe('TeamComponent', () => {
     fixture.componentRef.setInput('userId', '1');
     fixture.detectChanges();
     http.expectOne('/api/users/1/tasks').flush([
-      { id: 10, title: 'Plan', description: null, status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' },
-      { id: 11, title: 'Ship', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, createdAt: '', updatedAt: '' },
+      { id: 10, title: 'Plan', description: null, status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
+      { id: 11, title: 'Ship', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
     ]);
     fixture.detectChanges();
 
@@ -62,9 +62,39 @@ describe('TeamComponent', () => {
     expect(cards[0].textContent).toContain('Ship');
   });
 
+  it('searches and filters the selected user tasks, and resets when switching user', () => {
+    fixture.componentRef.setInput('userId', '1');
+    fixture.detectChanges();
+    http.expectOne('/api/users/1/tasks').flush([
+      { id: 10, title: 'Plan sprint', description: null, status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
+      { id: 11, title: 'Ship release', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
+    ]);
+    const el: HTMLElement = fixture.nativeElement;
+    const component = fixture.componentInstance;
+
+    component.patchQuery({ search: 'ship' });
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-cy=task-card]').length).toBe(1);
+
+    component.patchQuery({ priority: 'LOW' });
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-cy=task-card]').length).toBe(0);
+    expect(el.querySelector('[data-cy=no-match]')).not.toBeNull();
+
+    el.querySelector<HTMLButtonElement>('[data-cy=clear-filters]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelectorAll('[data-cy=task-card]').length).toBe(2);
+
+    component.patchQuery({ search: 'plan' });
+    fixture.componentRef.setInput('userId', '2');
+    fixture.detectChanges();
+    http.expectOne('/api/users/2/tasks').flush([]);
+    expect(component.query().search).toBe('');
+  });
+
   it('opens the task details when a card is clicked', () => {
     const open = jest.spyOn(TestBed.inject(MatDialog), 'open');
-    const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' };
+    const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' };
     fixture.componentRef.setInput('userId', '1');
     fixture.detectChanges();
     http.expectOne('/api/users/1/tasks').flush([task]);
@@ -74,5 +104,7 @@ describe('TeamComponent', () => {
     expect(open).toHaveBeenCalledWith(TaskDetailDialogComponent, expect.objectContaining({
       data: { task, ownerName: 'Alice Martin' },
     }));
+    // the dialog loads the task's comment thread
+    http.expectOne('/api/tasks/10/comments').flush([]);
   });
 });

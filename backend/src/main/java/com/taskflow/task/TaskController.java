@@ -1,5 +1,6 @@
 package com.taskflow.task;
 
+import com.taskflow.task.TaskDtos.ChecklistToggleRequest;
 import com.taskflow.task.TaskDtos.StatusUpdateRequest;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
@@ -48,6 +49,13 @@ public class TaskController {
     public TaskResponse updateStatus(@AuthenticationPrincipal User user, @PathVariable Long id,
                                      @Valid @RequestBody StatusUpdateRequest request) {
         return taskService.updateStatus(user, id, request.status());
+    }
+
+    @PatchMapping("/{id}/checklist/{itemId}")
+    public TaskResponse toggleChecklistItem(@AuthenticationPrincipal User user, @PathVariable Long id,
+                                            @PathVariable Long itemId,
+                                            @Valid @RequestBody ChecklistToggleRequest request) {
+        return taskService.toggleChecklistItem(user, id, itemId, request.done());
     }
 
     @DeleteMapping("/{id}")

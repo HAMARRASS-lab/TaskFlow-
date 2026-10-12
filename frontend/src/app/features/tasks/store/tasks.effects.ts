@@ -43,8 +43,27 @@ export const changeStatus$ = createEffect(
   (actions$ = inject(Actions), api = inject(TaskService)) =>
     actions$.pipe(
       ofType(TasksActions.changeStatus),
-      mergeMap(({ id, status }) =>
-        api.updateStatus(id, status).pipe(map((task) => TasksActions.updateSuccess({ task })), catchError(failure)),
+      mergeMap(({ id, status, from }) =>
+        api.updateStatus(id, status).pipe(
+          map((task) => TasksActions.updateSuccess({ task })),
+          catchError((error) => of(TasksActions.changeStatusFailure({ id, status: from, error: errorMessage(error) }))),
+        ),
+      ),
+    ),
+  { functional: true },
+);
+
+export const toggleChecklistItem$ = createEffect(
+  (actions$ = inject(Actions), api = inject(TaskService)) =>
+    actions$.pipe(
+      ofType(TasksActions.toggleChecklistItem),
+      mergeMap(({ id, itemId, done }) =>
+        api.toggleChecklistItem(id, itemId, done).pipe(
+          map((task) => TasksActions.updateSuccess({ task })),
+          catchError((error) =>
+            of(TasksActions.toggleChecklistItemFailure({ id, itemId, done: !done, error: errorMessage(error) })),
+          ),
+        ),
       ),
     ),
   { functional: true },
@@ -64,7 +83,7 @@ export const deleteTask$ = createEffect(
 export const showError$ = createEffect(
   (actions$ = inject(Actions), snackBar = inject(MatSnackBar)) =>
     actions$.pipe(
-      ofType(TasksActions.requestFailure),
+      ofType(TasksActions.requestFailure, TasksActions.changeStatusFailure, TasksActions.toggleChecklistItemFailure),
       tap(({ error }) => snackBar.open(error, 'Close', { duration: 4000 })),
     ),
   { functional: true, dispatch: false },

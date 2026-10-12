@@ -14,6 +14,8 @@ describe('Authentication', () => {
       },
     }).as('login');
     cy.intercept('GET', '/api/tasks', { fixture: 'tasks.json' }).as('tasks');
+    cy.intercept('GET', '/api/auth/me', { id: 1, email: 'alice@test.com', fullName: 'Alice', role: 'USER' });
+    cy.intercept('GET', '/api/meetings/invitations', []);
 
     cy.visit('/login');
     cy.get('[data-cy=email]').type('alice@test.com');

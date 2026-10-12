@@ -2,11 +2,16 @@ package com.taskflow.task;
 
 import com.taskflow.user.User;
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "tasks")
@@ -39,6 +44,17 @@ public class Task {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
+    @ElementCollection
+    @CollectionTable(name = "task_labels", joinColumns = @JoinColumn(name = "task_id"))
+    @Column(name = "name", nullable = false, length = 30)
+    @BatchSize(size = 50)
+    private Set<String> labels = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("position")
+    @BatchSize(size = 50)
+    private List<ChecklistItem> checklist = new ArrayList<>();
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -56,6 +72,11 @@ public class Task {
         updatedAt = LocalDateTime.now();
     }
 
+    /** Marks the task as modified when only its labels or checklist changed (those don't trigger @PreUpdate). */
+    void touch() {
+        updatedAt = LocalDateTime.now();
+    }
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
     public String getTitle() { return title; }
@@ -70,6 +91,8 @@ public class Task {
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
     public User getOwner() { return owner; }
     public void setOwner(User owner) { this.owner = owner; }
+    public Set<String> getLabels() { return labels; }
+    public List<ChecklistItem> getChecklist() { return checklist; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

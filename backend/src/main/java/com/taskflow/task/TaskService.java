@@ -1,6 +1,7 @@
 package com.taskflow.task;
 
 import com.taskflow.common.NotFoundException;
+import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.TaskOwnerSummary;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
@@ -10,10 +11,14 @@ import com.taskflow.user.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -97,6 +102,17 @@ public class TaskService {
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
+    public TaskResponse toggleChecklistItem(User owner, Long id, Long itemId, boolean done) {
+        Task task = load(owner, id);
+        ChecklistItem item = task.getChecklist().stream()
+                .filter(i -> itemId.equals(i.getId()))
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Checklist item " + itemId + " not found"));
+        item.setDone(done);
+        task.touch();
+        return TaskResponse.from(tasks.saveAndFlush(task));
+    }
+
     public void delete(User owner, Long id) {
         tasks.delete(load(owner, id));
     }
@@ -120,5 +136,40 @@ public class TaskService {
         if (request.priority() != null) {
             task.setPriority(request.priority());
         }
+        if (request.labels() != null) {
+            task.getLabels().clear();
+            request.labels().stream().map(TaskService::normalizeLabel).forEach(task.getLabels()::add);
+            task.touch();
+        }
+        if (request.checklist() != null) {
+            applyChecklist(task, request.checklist());
+            task.touch();
+        }
+    }
+
+    /** "  Front End " → "front end", so the same label is never stored twice with different casing. */
+    static String normalizeLabel(String label) {
+        return label.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    /** Replaces the checklist, keeping (and updating) the items whose id is in the request. */
+    private static void applyChecklist(Task task, List<ChecklistItemRequest> requested) {
+        Map<Long, ChecklistItem> existing = task.getChecklist().stream()
+                .filter(i -> i.getId() != null)
+                .collect(Collectors.toMap(ChecklistItem::getId, Function.identity(), (a, b) -> a));
+        List<ChecklistItem> items = new ArrayList<>();
+        for (ChecklistItemRequest r : requested) {
+            ChecklistItem item = r.id() == null ? null : existing.remove(r.id());
+            if (item == null) {
+                item = new ChecklistItem();
+                item.setTask(task);
+            }
+            item.setTitle(r.title().strip());
+            item.setDone(r.done());
+            item.setPosition(items.size());
+            items.add(item);
+        }
+        task.getChecklist().clear();
+        task.getChecklist().addAll(items);
     }
 }

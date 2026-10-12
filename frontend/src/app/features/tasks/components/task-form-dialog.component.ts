@@ -1,12 +1,21 @@
-import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Component, computed, inject, signal } from '@angular/core';
+import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
+import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
-import { STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task, TaskPriority, TaskRequest, TaskStatus } from '../task.models';
+import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { TaskCommentsComponent } from '../comments/task-comments.component';
+import {
+  MAX_CHECKLIST_ITEMS, MAX_LABEL_LENGTH, MAX_LABELS, STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task, TaskPriority,
+  TaskRequest, TaskStatus, labelColor, normalizeLabel,
+} from '../task.models';
 
 /** Formats a Date as YYYY-MM-DD in local time (what the API expects for LocalDate). */
 export function toIsoDate(date: Date | null): string | null {
@@ -15,13 +24,21 @@ export function toIsoDate(date: Date | null): string | null {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+export interface TaskFormData {
+  /** The task to edit, or null to create one. */
+  task: Task | null;
+  /** Labels already in use, suggested while typing. */
+  labels: string[];
+}
+
 @Component({
   selector: 'app-task-form-dialog',
   standalone: true,
-  imports: [ReactiveFormsModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule,
-    MatDatepickerModule, MatButtonModule],
+  imports: [ReactiveFormsModule, MatDialogModule, MatAutocompleteModule, MatCheckboxModule, MatChipsModule,
+    MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatDatepickerModule, MatButtonModule,
+    TaskCommentsComponent],
   template: `
-    <h2 mat-dialog-title>{{ data ? 'Edit task' : 'New task' }}</h2>
+    <h2 mat-dialog-title>{{ task ? 'Edit task' : 'New task' }}</h2>
     <form [formGroup]="form" (ngSubmit)="save()">
       <mat-dialog-content>
         <mat-form-field appearance="outline" class="full-width">
@@ -36,7 +53,7 @@ export function toIsoDate(date: Date | null): string | null {
           <mat-form-field appearance="outline">
             <mat-label>Status</mat-label>
             <mat-select formControlName="status">
-              @for (s of statuses; track s) { <mat-option [value]="s">{{ labels[s] }}</mat-option> }
+              @for (s of statuses; track s) { <mat-option [value]="s">{{ statusLabels[s] }}</mat-option> }
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline">
@@ -52,6 +69,56 @@ export function toIsoDate(date: Date | null): string | null {
           <mat-datepicker-toggle matIconSuffix [for]="picker" />
           <mat-datepicker #picker />
         </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Labels</mat-label>
+          <mat-chip-grid #chipGrid aria-label="Labels">
+            @for (l of labels(); track l) {
+              <mat-chip-row (removed)="removeLabel(l)" [style.--mdc-chip-elevated-container-color]="color(l).background"
+                            [style.--mdc-chip-label-text-color]="color(l).color"
+                            [style.--mdc-chip-with-trailing-icon-trailing-icon-color]="color(l).color"
+                            data-cy="label-chip-row">
+                {{ l }}
+                <button matChipRemove [attr.aria-label]="'Remove ' + l"><mat-icon>cancel</mat-icon></button>
+              </mat-chip-row>
+            }
+            <input [placeholder]="labels().length >= maxLabels ? '' : 'bug, frontend, urgent…'"
+                   [formControl]="labelInput" [matChipInputFor]="chipGrid" [matAutocomplete]="labelAuto"
+                   [matChipInputSeparatorKeyCodes]="separators" (matChipInputTokenEnd)="addLabel($event)"
+                   [maxlength]="maxLabelLength" [readonly]="labels().length >= maxLabels" data-cy="label-input" />
+          </mat-chip-grid>
+          <mat-autocomplete #labelAuto (optionSelected)="selectLabel($event)">
+            @for (l of suggestions(); track l) { <mat-option [value]="l">{{ l }}</mat-option> }
+          </mat-autocomplete>
+          <mat-hint>Press Enter or comma to add · up to {{ maxLabels }}</mat-hint>
+        </mat-form-field>
+
+        <section class="checklist" formArrayName="checklist">
+          <h3>
+            Checklist
+            @if (checklist.length) { <span class="muted">{{ doneCount() }}/{{ checklist.length }}</span> }
+          </h3>
+          @for (item of checklist.controls; track item; let i = $index) {
+            <div class="item" [formGroupName]="i" data-cy="checklist-row">
+              <mat-checkbox formControlName="done" [attr.aria-label]="'Done: ' + item.value.title" />
+              <input class="item-title" formControlName="title" maxlength="200" aria-label="Checklist item"
+                     [class.checked]="item.value.done" />
+              <button mat-icon-button type="button" class="remove" (click)="removeItem(i)" aria-label="Remove item">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+          @if (checklist.length < maxItems) {
+            <div class="item add">
+              <mat-icon>add</mat-icon>
+              <input class="item-title" [formControl]="newItem" maxlength="200" placeholder="Add an item"
+                     (keydown.enter)="$event.preventDefault(); addItem()" (blur)="addItem()"
+                     data-cy="checklist-new" />
+            </div>
+          }
+        </section>
+
+        @if (task) { <app-task-comments [taskId]="task.id" /> }
       </mat-dialog-content>
       <mat-dialog-actions align="end">
         <button mat-button type="button" mat-dialog-close>Cancel</button>
@@ -59,33 +126,128 @@ export function toIsoDate(date: Date | null): string | null {
       </mat-dialog-actions>
     </form>
   `,
-  styles: [`.row { display: flex; gap: 12px; } .row mat-form-field { flex: 1; }`],
+  styles: [`
+    .row { display: flex; gap: 12px; } .row mat-form-field { flex: 1; }
+    .checklist { margin: 4px 0 16px; }
+    .checklist h3 { display: flex; gap: 8px; align-items: baseline; margin: 0 0 6px; font-size: 14px; font-weight: 600; }
+    .muted { color: var(--tf-muted); font-weight: 400; font-size: 13px; }
+    .item { display: flex; align-items: center; gap: 2px; border-radius: 8px; }
+    .item:hover { background: #f6f7fb; }
+    .item-title {
+      flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: 14px; padding: 8px 4px;
+      color: var(--tf-text); outline: none; border-bottom: 1px solid transparent;
+    }
+    .item-title:focus { border-bottom-color: var(--tf-accent); }
+    .item-title.checked { text-decoration: line-through; color: var(--tf-muted); }
+    .item.add { padding-left: 10px; color: var(--tf-muted); }
+    .item.add mat-icon { font-size: 20px; width: 20px; height: 20px; margin-right: 8px; }
+    .remove { --mdc-icon-button-state-layer-size: 32px; padding: 4px; color: #9aa0b1; }
+    .remove mat-icon { font-size: 18px; width: 18px; height: 18px; }
+  `],
 })
 export class TaskFormDialogComponent {
-  readonly data = inject<Task | null>(MAT_DIALOG_DATA, { optional: true });
+  readonly data = inject<TaskFormData | null>(MAT_DIALOG_DATA, { optional: true });
+  readonly task = this.data?.task ?? null;
   private readonly dialogRef = inject(MatDialogRef<TaskFormDialogComponent, TaskRequest>);
+  private readonly fb = inject(FormBuilder).nonNullable;
 
   readonly statuses = TASK_STATUSES;
   readonly priorities = TASK_PRIORITIES;
-  readonly labels = STATUS_LABELS;
+  readonly statusLabels = STATUS_LABELS;
+  readonly separators = [ENTER, COMMA] as const;
+  readonly maxLabels = MAX_LABELS;
+  readonly maxLabelLength = MAX_LABEL_LENGTH;
+  readonly maxItems = MAX_CHECKLIST_ITEMS;
 
-  readonly form = inject(FormBuilder).group({
-    title: [this.data?.title ?? '', [Validators.required, Validators.maxLength(200)]],
-    description: [this.data?.description ?? ''],
-    status: [this.data?.status ?? ('TODO' as TaskStatus), Validators.required],
-    priority: [this.data?.priority ?? ('MEDIUM' as TaskPriority), Validators.required],
-    dueDate: [this.data?.dueDate ? new Date(this.data.dueDate + 'T00:00:00') : (null as Date | null)],
+  readonly form = this.fb.group({
+    title: [this.task?.title ?? '', [Validators.required, Validators.maxLength(200)]],
+    description: [this.task?.description ?? ''],
+    status: [this.task?.status ?? ('TODO' as TaskStatus), Validators.required],
+    priority: [this.task?.priority ?? ('MEDIUM' as TaskPriority), Validators.required],
+    dueDate: [this.task?.dueDate ? new Date(this.task.dueDate + 'T00:00:00') : (null as Date | null)],
+    checklist: this.fb.array((this.task?.checklist ?? []).map((i) => this.itemGroup(i.title, i.done, i.id))),
   });
 
+  readonly labels = signal<string[]>([...(this.task?.labels ?? [])]);
+  readonly labelInput = new FormControl('', { nonNullable: true });
+  readonly newItem = new FormControl('', { nonNullable: true });
+  private readonly labelQuery = signal('');
+  private readonly checklistValue = signal(this.form.controls.checklist.getRawValue());
+
+  readonly suggestions = computed(() => {
+    const q = normalizeLabel(this.labelQuery());
+    return (this.data?.labels ?? []).filter((l) => !this.labels().includes(l) && l.includes(q));
+  });
+  readonly doneCount = computed(() => this.checklistValue().filter((i) => i.done).length);
+
+  constructor() {
+    this.labelInput.valueChanges.subscribe((v) => this.labelQuery.set(v));
+    this.form.controls.checklist.valueChanges.subscribe(() =>
+      this.checklistValue.set(this.form.controls.checklist.getRawValue()),
+    );
+  }
+
+  get checklist() {
+    return this.form.controls.checklist;
+  }
+
+  color(label: string) {
+    return labelColor(label);
+  }
+
+  addLabel(event: MatChipInputEvent): void {
+    this.pushLabel(event.value);
+    event.chipInput.clear();
+  }
+
+  selectLabel(event: MatAutocompleteSelectedEvent): void {
+    this.pushLabel(event.option.value);
+  }
+
+  removeLabel(label: string): void {
+    this.labels.update((ls) => ls.filter((l) => l !== label));
+  }
+
+  private pushLabel(raw: string): void {
+    const label = normalizeLabel(raw).slice(0, MAX_LABEL_LENGTH);
+    this.labelInput.setValue('');
+    if (!label || this.labels().includes(label) || this.labels().length >= MAX_LABELS) return;
+    this.labels.update((ls) => [...ls, label]);
+  }
+
+  addItem(): void {
+    const title = this.newItem.value.trim();
+    if (!title || this.checklist.length >= MAX_CHECKLIST_ITEMS) return;
+    this.checklist.push(this.itemGroup(title, false, null));
+    this.newItem.setValue('');
+  }
+
+  removeItem(index: number): void {
+    this.checklist.removeAt(index);
+  }
+
   save(): void {
+    // Text still in the label / new-item inputs counts, so nothing typed is silently lost.
+    this.pushLabel(this.labelInput.value);
+    this.addItem();
     if (this.form.invalid) return;
     const v = this.form.getRawValue();
     this.dialogRef.close({
-      title: v.title!.trim(),
+      title: v.title.trim(),
       description: v.description || null,
-      status: v.status!,
-      priority: v.priority!,
+      status: v.status,
+      priority: v.priority,
       dueDate: toIsoDate(v.dueDate),
+      labels: this.labels(),
+      checklist: v.checklist.map((i) => ({ id: i.id, title: i.title.trim(), done: i.done })),
+    });
+  }
+
+  private itemGroup(title: string, done: boolean, id: number | null) {
+    return this.fb.group({
+      id: [id as number | null],
+      title: [title, [Validators.required, Validators.pattern(/\S/), Validators.maxLength(200)]],
+      done: [done],
     });
   }
 }
