@@ -1,7 +1,7 @@
 import { createEntityAdapter, EntityState } from '@ngrx/entity';
 import { createFeature, createReducer, createSelector, on } from '@ngrx/store';
 import { AuthActions } from '../../../core/auth/store/auth.actions';
-import { Task, TaskFilter } from '../task.models';
+import { TASK_STATUSES, Task, TaskFilter, TaskStatus, TaskView, collectLabels } from '../task.models';
 import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from '../task-query';
 import { TasksActions } from './tasks.actions';
 
@@ -9,6 +9,7 @@ export interface TasksState extends EntityState<Task> {
   loading: boolean;
   error: string | null;
   filter: TaskFilter;
+  view: TaskView;
   query: TaskQuery;
 }
 
@@ -20,6 +21,7 @@ export const initialTasksState: TasksState = tasksAdapter.getInitialState({
   loading: false,
   error: null,
   filter: 'ALL',
+  view: 'BOARD',
   query: DEFAULT_TASK_QUERY,
 });
 
@@ -35,17 +37,32 @@ export const tasksFeature = createFeature({
     on(TasksActions.updateSuccess, (state, { task }) => tasksAdapter.upsertOne(task, state)),
     on(TasksActions.deleteSuccess, (state, { id }) => tasksAdapter.removeOne(id, state)),
     on(TasksActions.requestFailure, (state, { error }) => ({ ...state, loading: false, error })),
+    on(TasksActions.changeStatus, (state, { id, status }) => tasksAdapter.updateOne({ id, changes: { status } }, state)),
+    on(TasksActions.changeStatusFailure, (state, { id, status, error }) =>
+      tasksAdapter.updateOne({ id, changes: { status } }, { ...state, error }),
+    ),
+    on(TasksActions.toggleChecklistItem, (state, { id, itemId, done }) => setItemDone(state, id, itemId, done)),
+    on(TasksActions.toggleChecklistItemFailure, (state, { id, itemId, done, error }) =>
+      setItemDone({ ...state, error }, id, itemId, done),
+    ),
     on(TasksActions.setFilter, (state, { filter }) => ({ ...state, filter })),
+    on(TasksActions.setView, (state, { view }) => ({ ...state, view })),
     on(TasksActions.setQuery, (state, { query }) => ({ ...state, query: { ...state.query, ...query } })),
     on(TasksActions.resetQuery, (state) => ({ ...state, query: { ...DEFAULT_TASK_QUERY, sort: state.query.sort } })),
-    on(AuthActions.logout, () => initialTasksState),
+    on(AuthActions.logout, (state) => ({ ...initialTasksState, view: state.view })),
   ),
   extraSelectors: ({ selectTasksState, selectFilter, selectQuery }) => {
     const selectAllTasks = createSelector(selectTasksState, selectAll);
+    const selectQueriedTasks = createSelector(selectAllTasks, selectQuery, applyTaskQuery);
     return {
       selectAllTasks,
-      selectFilteredTasks: createSelector(selectAllTasks, selectFilter, selectQuery, (tasks, filter, query) =>
-        applyTaskQuery(filter === 'ALL' ? tasks : tasks.filter((t) => t.status === filter), query),
+      /** Kanban columns: search, filters and sort apply, the status filter does not. */
+      selectColumns: createSelector(selectQueriedTasks, (tasks) =>
+        TASK_STATUSES.map((status) => ({ status, tasks: tasks.filter((t) => t.status === status) })),
+      ),
+      selectLabels: createSelector(selectAllTasks, collectLabels),
+      selectFilteredTasks: createSelector(selectQueriedTasks, selectFilter, (tasks, filter) =>
+        filter === 'ALL' ? tasks : tasks.filter((t) => t.status === filter),
       ),
       selectQueryActive: createSelector(selectQuery, isQueryActive),
       selectStats: createSelector(selectAllTasks, (tasks) => ({
@@ -57,3 +74,10 @@ export const tasksFeature = createFeature({
     };
   },
 });
+
+function setItemDone(state: TasksState, id: number, itemId: number, done: boolean): TasksState {
+  const task = state.entities[id];
+  if (!task) return state;
+  const checklist = task.checklist.map((i) => (i.id === itemId ? { ...i, done } : i));
+  return tasksAdapter.updateOne({ id, changes: { checklist } }, state);
+}

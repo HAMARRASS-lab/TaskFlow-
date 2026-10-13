@@ -45,8 +45,8 @@ describe('TeamComponent', () => {
     fixture.componentRef.setInput('userId', '1');
     fixture.detectChanges();
     http.expectOne('/api/users/1/tasks').flush([
-      { id: 10, title: 'Plan', description: null, status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' },
-      { id: 11, title: 'Ship', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, createdAt: '', updatedAt: '' },
+      { id: 10, title: 'Plan', description: null, status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
+      { id: 11, title: 'Ship', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
     ]);
     fixture.detectChanges();
 
@@ -66,8 +66,8 @@ describe('TeamComponent', () => {
     fixture.componentRef.setInput('userId', '1');
     fixture.detectChanges();
     http.expectOne('/api/users/1/tasks').flush([
-      { id: 10, title: 'Plan sprint', description: null, status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' },
-      { id: 11, title: 'Ship release', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, createdAt: '', updatedAt: '' },
+      { id: 10, title: 'Plan sprint', description: null, status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
+      { id: 11, title: 'Ship release', description: null, status: 'DONE', priority: 'HIGH', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' },
     ]);
     const el: HTMLElement = fixture.nativeElement;
     const component = fixture.componentInstance;
@@ -94,7 +94,7 @@ describe('TeamComponent', () => {
 
   it('opens the task details when a card is clicked', () => {
     const open = jest.spyOn(TestBed.inject(MatDialog), 'open');
-    const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, createdAt: '', updatedAt: '' };
+    const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '' };
     fixture.componentRef.setInput('userId', '1');
     fixture.detectChanges();
     http.expectOne('/api/users/1/tasks').flush([task]);

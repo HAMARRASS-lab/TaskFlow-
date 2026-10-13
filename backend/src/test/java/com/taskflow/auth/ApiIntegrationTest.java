@@ -366,6 +366,75 @@ class ApiIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
+    @Test
+    void organizesTasksWithLabelsAndChecklists() throws Exception {
+        String suffix = UUID.randomUUID().toString();
+        String owner = register("lab-" + suffix + "@test.com", "Lena Labels");
+        String other = register("oth-" + suffix + "@test.com", "Otto Other");
+
+        // labels are normalized and sorted; checklist items keep their order
+        String created = mvc.perform(post("/api/tasks").header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"title":"Release","labels":["  Frontend ","bug","BUG"],
+                                 "checklist":[{"title":" Tag the build "},{"title":"Write notes","done":true}]}"""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.labels.length()").value(2))
+                .andExpect(jsonPath("$.labels[0]").value("bug"))
+                .andExpect(jsonPath("$.labels[1]").value("frontend"))
+                .andExpect(jsonPath("$.checklist[0].title").value("Tag the build"))
+                .andExpect(jsonPath("$.checklist[0].done").value(false))
+                .andExpect(jsonPath("$.checklist[1].done").value(true))
+                .andReturn().getResponse().getContentAsString();
+        JsonNode task = json.readTree(created);
+        long id = task.get("id").asLong();
+        long first = task.get("checklist").get(0).get("id").asLong();
+        long second = task.get("checklist").get(1).get("id").asLong();
+
+        // tick an item
+        mvc.perform(patch("/api/tasks/{id}/checklist/{item}", id, first).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"done\":true}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checklist[0].done").value(true));
+        mvc.perform(patch("/api/tasks/{id}/checklist/{item}", id, 999_999).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"done\":true}"))
+                .andExpect(status().isNotFound());
+        mvc.perform(patch("/api/tasks/{id}/checklist/{item}", id, first).header("Authorization", other)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"done\":false}"))
+                .andExpect(status().isNotFound());
+
+        // an update without labels/checklist leaves them alone
+        mvc.perform(put("/api/tasks/{id}", id).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Release v2\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.labels.length()").value(2))
+                .andExpect(jsonPath("$.checklist.length()").value(2));
+
+        // replacing the checklist: reorder + keep one item, drop the other, add a new one
+        mvc.perform(put("/api/tasks/{id}", id).header("Authorization", owner)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                {"title":"Release v2","labels":[],
+                                 "checklist":[{"title":"Announce"},{"id":%d,"title":"Write notes","done":false}]}"""
+                                .formatted(second)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.labels.length()").value(0))
+                .andExpect(jsonPath("$.checklist.length()").value(2))
+                .andExpect(jsonPath("$.checklist[0].title").value("Announce"))
+                .andExpect(jsonPath("$.checklist[1].id").value(second))
+                .andExpect(jsonPath("$.checklist[1].done").value(false));
+
+        // validation: blank checklist title, too-long label
+        mvc.perform(post("/api/tasks").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"x\",\"checklist\":[{\"title\":\" \"}]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/tasks").header("Authorization", owner).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"x\",\"labels\":[\"%s\"]}".formatted("a".repeat(31))))
+                .andExpect(status().isBadRequest());
+
+        // deleting the task removes its labels and checklist with it
+        mvc.perform(delete("/api/tasks/{id}", id).header("Authorization", owner))
+                .andExpect(status().isNoContent());
+    }
+
     private String register(String email, String fullName) throws Exception {
         String body = mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"%s\",\"password\":\"password123\",\"fullName\":\"%s\"}"

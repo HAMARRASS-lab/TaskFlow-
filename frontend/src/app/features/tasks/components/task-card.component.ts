@@ -1,14 +1,21 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, isOverdue } from '../task.models';
+import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, checklistProgress, isOverdue } from '../task.models';
+import { LabelChipComponent } from './label-chip.component';
+
+export interface ChecklistToggle {
+  itemId: number;
+  done: boolean;
+}
 
 @Component({
   selector: 'app-task-card',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatIconModule, MatSelectModule],
+  imports: [DatePipe, MatButtonModule, MatCheckboxModule, MatIconModule, MatSelectModule, LabelChipComponent],
   template: `
     <article class="card" [class.done]="task.status === 'DONE'" [attr.data-priority]="task.priority" data-cy="task-card">
       <div class="top">
@@ -31,6 +38,35 @@ import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, isOverdue } from '../ta
       </div>
       <h3 class="title">{{ task.title }}</h3>
       @if (task.description) { <p class="desc">{{ task.description }}</p> }
+      @if (task.labels.length) {
+        <div class="labels" data-cy="task-labels">
+          @for (l of task.labels; track l) { <app-label-chip [label]="l" /> }
+        </div>
+      }
+      @if (progress.total) {
+        <button type="button" class="progress" [class.complete]="progress.done === progress.total"
+                (click)="toggleChecklist($event)" (keydown.enter)="$event.stopPropagation()"
+                (keydown.space)="$event.stopPropagation()"
+                [attr.aria-expanded]="expanded" aria-label="Checklist" data-cy="checklist-progress">
+          <mat-icon>checklist</mat-icon>
+          <span class="count">{{ progress.done }}/{{ progress.total }} done</span>
+          <span class="bar"><span class="fill" [style.width.%]="progress.percent"></span></span>
+          <mat-icon class="chevron">{{ expanded ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+        @if (expanded) {
+          <ul class="checklist" data-cy="checklist" (click)="$event.stopPropagation()">
+            @for (item of task.checklist; track item.id) {
+              <li>
+                <mat-checkbox [checked]="item.done" [disabled]="readonly"
+                              (change)="checklistToggle.emit({ itemId: item.id, done: $event.checked })"
+                              data-cy="checklist-item">
+                  <span [class.checked]="item.done">{{ item.title }}</span>
+                </mat-checkbox>
+              </li>
+            }
+          </ul>
+        }
+      }
       <div class="bottom">
         @if (readonly) {
           <span class="status static" [attr.data-status]="task.status" data-cy="task-status">{{ labels[task.status] }}</span>
@@ -78,6 +114,24 @@ import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, isOverdue } from '../ta
       margin: 6px 0 0; color: var(--tf-muted); font-size: 14px; line-height: 1.5;
       display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     }
+    .labels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
+
+    .progress {
+      display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 12px; padding: 6px 8px;
+      border: 0; border-radius: 8px; background: #f6f7fb; color: var(--tf-muted); font: inherit; font-size: 12px;
+      cursor: pointer; text-align: left;
+    }
+    .progress:hover { background: #eef0f4; }
+    .progress mat-icon { font-size: 17px; width: 17px; height: 17px; flex: none; }
+    .progress .count { flex: none; font-weight: 500; }
+    .progress .bar { flex: 1; height: 6px; border-radius: 99px; background: #e3e6ee; overflow: hidden; }
+    .progress .fill { display: block; height: 100%; border-radius: 99px; background: var(--tf-accent); transition: width .3s ease; }
+    .progress.complete .fill { background: var(--tf-done); }
+    .progress.complete .count { color: var(--tf-done); }
+    .checklist { list-style: none; margin: 4px 0 0; padding: 0; }
+    .checklist li { margin-left: -8px; font-size: 13.5px; }
+    .checklist .checked { text-decoration: line-through; color: var(--tf-muted); }
+
     .card.done .title { text-decoration: line-through; color: var(--tf-muted); }
     .card.done { background: #fbfcfd; }
 
@@ -99,9 +153,21 @@ export class TaskCardComponent {
   @Output() statusChange = new EventEmitter<TaskStatus>();
   @Output() edit = new EventEmitter<Task>();
   @Output() remove = new EventEmitter<number>();
+  @Output() checklistToggle = new EventEmitter<ChecklistToggle>();
 
   readonly statuses = TASK_STATUSES;
   readonly labels = STATUS_LABELS;
+  expanded = false;
+
+  get progress(): { done: number; total: number; percent: number } {
+    return checklistProgress(this.task);
+  }
+
+  /** Doesn't bubble, so a clickable card (Team page) doesn't open its details. */
+  toggleChecklist(event: Event): void {
+    event.stopPropagation();
+    this.expanded = !this.expanded;
+  }
 
   get isOverdue(): boolean {
     return isOverdue(this.task);

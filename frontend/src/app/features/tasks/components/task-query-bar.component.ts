@@ -5,13 +5,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { TASK_PRIORITIES } from '../task.models';
+import { LabelChipComponent } from './label-chip.component';
 import { DUE_FILTER_LABELS, DueFilter, SORT_LABELS, TaskQuery, TaskSort, isQueryActive } from '../task-query';
 
-/** Search box + priority / due date / sort selects, shared by the board and the Team page. */
+/** Search box + priority / label / due date / sort selects, shared by the board and the Team page. */
 @Component({
   selector: 'app-task-query-bar',
   standalone: true,
-  imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
+  imports: [MatButtonModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, LabelChipComponent],
   template: `
     <div class="bar">
       <mat-form-field appearance="outline" subscriptSizing="dynamic" class="search">
@@ -27,6 +28,17 @@ import { DUE_FILTER_LABELS, DueFilter, SORT_LABELS, TaskQuery, TaskSort, isQuery
           @for (p of priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }
         </mat-select>
       </mat-form-field>
+
+      @if (labels.length || query.label) {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-icon matPrefix>sell</mat-icon>
+          <mat-select [value]="query.label" (selectionChange)="patch({ label: $event.value })"
+                      placeholder="Any label" aria-label="Label" data-cy="label-filter">
+            <mat-option [value]="null">Any label</mat-option>
+            @for (l of labels; track l) { <mat-option [value]="l"><app-label-chip [label]="l" /></mat-option> }
+          </mat-select>
+        </mat-form-field>
+      }
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-select [value]="query.due" (selectionChange)="patch({ due: $event.value })"
@@ -61,6 +73,8 @@ import { DUE_FILTER_LABELS, DueFilter, SORT_LABELS, TaskQuery, TaskSort, isQuery
 })
 export class TaskQueryBarComponent {
   @Input({ required: true }) query!: TaskQuery;
+  /** Labels offered by the label filter (hidden when there are none). */
+  @Input() labels: string[] = [];
   @Output() queryChange = new EventEmitter<Partial<TaskQuery>>();
   @Output() reset = new EventEmitter<void>();
 

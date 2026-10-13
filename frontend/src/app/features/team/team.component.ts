@@ -11,7 +11,7 @@ import { authFeature } from '../../core/auth/store/auth.reducer';
 import { TaskCardComponent } from '../tasks/components/task-card.component';
 import { TaskQueryBarComponent } from '../tasks/components/task-query-bar.component';
 import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from '../tasks/task-query';
-import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter } from '../tasks/task.models';
+import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, collectLabels } from '../tasks/task.models';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 import { TaskOwner, TeamService } from './team.service';
 import { AdminService, AdminUser } from '../admin/admin.service';
@@ -61,7 +61,7 @@ import { AdminService, AdminUser } from '../admin/admin.service';
                 }
               </mat-button-toggle-group>
             </div>
-            <app-task-query-bar class="query" [query]="query()" (queryChange)="patchQuery($event)" (reset)="resetQuery()" />
+            <app-task-query-bar class="query" [query]="query()" [labels]="taskLabels()" (queryChange)="patchQuery($event)" (reset)="resetQuery()" />
             @if (loadingTasks()) { <mat-progress-bar mode="indeterminate" class="loading" /> }
             <div class="grid">
               @for (task of visibleTasks(); track task.id) {
@@ -163,6 +163,7 @@ export class TeamComponent implements OnInit {
 
   readonly selected = computed(() => this.owners().find((o) => o.id === this.selectedId()) ?? null);
   readonly queryActive = computed(() => isQueryActive(this.query()));
+  readonly taskLabels = computed(() => collectLabels(this.tasks()));
   readonly visibleTasks = computed(() => {
     const f = this.filter();
     return applyTaskQuery(f === 'ALL' ? this.tasks() : this.tasks().filter((t) => t.status === f), this.query());

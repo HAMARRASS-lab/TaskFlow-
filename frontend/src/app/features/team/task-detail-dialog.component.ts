@@ -7,7 +7,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { TaskCommentsComponent } from '../tasks/comments/task-comments.component';
-import { STATUS_LABELS, Task, isOverdue } from '../tasks/task.models';
+import { LabelChipComponent } from '../tasks/components/label-chip.component';
+import { STATUS_LABELS, Task, checklistProgress, isOverdue } from '../tasks/task.models';
 
 export interface TaskDetailData {
   task: Task;
@@ -21,7 +22,7 @@ export interface TaskDetailData {
 @Component({
   selector: 'app-task-detail-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent, LabelChipComponent],
   template: `
     <h2 mat-dialog-title data-cy="detail-title">{{ task.title }}</h2>
     <mat-dialog-content>
@@ -29,6 +30,7 @@ export interface TaskDetailData {
         <span class="chip priority" [attr.data-priority]="task.priority">{{ task.priority }}</span>
         <span class="chip status" [attr.data-status]="task.status" data-cy="detail-status">{{ labels[task.status] }}</span>
         @if (overdue) { <span class="chip overdue"><mat-icon>error_outline</mat-icon>Overdue</span> }
+        @for (l of task.labels; track l) { <app-label-chip [label]="l" /> }
       </div>
 
       <h3>Description</h3>
@@ -36,6 +38,17 @@ export interface TaskDetailData {
         <p class="desc" data-cy="detail-description">{{ task.description }}</p>
       } @else {
         <p class="desc muted">No description.</p>
+      }
+
+      @if (task.checklist.length) {
+        <h3>Checklist · {{ progress.done }}/{{ progress.total }}</h3>
+        <ul class="checklist" data-cy="detail-checklist">
+          @for (item of task.checklist; track item.id) {
+            <li [class.done]="item.done">
+              <mat-icon>{{ item.done ? 'check_box' : 'check_box_outline_blank' }}</mat-icon>{{ item.title }}
+            </li>
+          }
+        </ul>
       }
 
       <dl>
@@ -84,6 +97,12 @@ export interface TaskDetailData {
     .desc { margin: 0 0 20px; white-space: pre-wrap; word-break: break-word; line-height: 1.55; color: var(--tf-text); }
     .desc.muted { color: var(--tf-muted); }
 
+    .checklist { list-style: none; margin: 0 0 20px; padding: 0; font-size: 14px; }
+    .checklist li { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+    .checklist mat-icon { font-size: 19px; width: 19px; height: 19px; color: var(--tf-muted); flex: none; }
+    .checklist li.done { color: var(--tf-muted); text-decoration: line-through; }
+    .checklist li.done mat-icon { color: var(--tf-done); }
+
     dl { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
     dt { color: var(--tf-muted); }
     dd { margin: 0; color: var(--tf-text); }
@@ -96,6 +115,7 @@ export class TaskDetailDialogComponent {
   readonly task = this.data.task;
   readonly labels = STATUS_LABELS;
   readonly overdue = isOverdue(this.task);
+  readonly progress = checklistProgress(this.task);
   private readonly dialogRef = inject(MatDialogRef<TaskDetailDialogComponent, number>, { optional: true });
   assigneeId = this.data.ownerId;
 

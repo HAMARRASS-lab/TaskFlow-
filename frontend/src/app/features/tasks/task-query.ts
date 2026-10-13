@@ -7,11 +7,13 @@ export type TaskSort = 'NEWEST' | 'OLDEST' | 'DUE_DATE' | 'PRIORITY' | 'TITLE';
 export interface TaskQuery {
   search: string;
   priority: TaskPriority | 'ALL';
+  /** Only tasks carrying this label; `null` = any. */
+  label: string | null;
   due: DueFilter;
   sort: TaskSort;
 }
 
-export const DEFAULT_TASK_QUERY: TaskQuery = { search: '', priority: 'ALL', due: 'ALL', sort: 'NEWEST' };
+export const DEFAULT_TASK_QUERY: TaskQuery = { search: '', priority: 'ALL', label: null, due: 'ALL', sort: 'NEWEST' };
 
 export const DUE_FILTER_LABELS: Record<DueFilter, string> = {
   ALL: 'Any due date',
@@ -33,7 +35,7 @@ const PRIORITY_RANK: Record<TaskPriority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2
 
 /** True when the query filters anything out (sort alone does not count). */
 export function isQueryActive(query: TaskQuery): boolean {
-  return query.search.trim() !== '' || query.priority !== 'ALL' || query.due !== 'ALL';
+  return query.search.trim() !== '' || query.priority !== 'ALL' || query.label !== null || query.due !== 'ALL';
 }
 
 /** Lower-cases and strips accents so "réunion" matches "reunion". */
@@ -75,7 +77,7 @@ function comparator(sort: TaskSort): (a: Task, b: Task) => number {
   }
 }
 
-/** Filters tasks by text (title + description), priority and due date, then sorts them. */
+/** Filters tasks by text (title, description, labels), priority, label and due date, then sorts them. */
 export function applyTaskQuery(tasks: Task[], query: TaskQuery, now = new Date()): Task[] {
   const terms = normalize(query.search).split(/\s+/).filter(Boolean);
   const today = isoDate(now);
@@ -83,10 +85,11 @@ export function applyTaskQuery(tasks: Task[], query: TaskQuery, now = new Date()
 
   return tasks
     .filter((t) => query.priority === 'ALL' || t.priority === query.priority)
+    .filter((t) => query.label === null || t.labels.includes(query.label))
     .filter((t) => matchesDue(t, query.due, today, inAWeek))
     .filter((t) => {
       if (!terms.length) return true;
-      const haystack = normalize(`${t.title} ${t.description ?? ''}`);
+      const haystack = normalize(`${t.title} ${t.description ?? ''} ${t.labels.join(' ')}`);
       return terms.every((term) => haystack.includes(term));
     })
     .sort(comparator(query.sort));

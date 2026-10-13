@@ -6,12 +6,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
-import { filter } from 'rxjs';
-import { TaskCardComponent } from './components/task-card.component';
-import { TaskFormDialogComponent } from './components/task-form-dialog.component';
+import { filter, take } from 'rxjs';
+import { ChecklistToggle, TaskCardComponent } from './components/task-card.component';
+import { TaskKanbanComponent } from './components/task-kanban.component';
+import { TaskFormData, TaskFormDialogComponent } from './components/task-form-dialog.component';
 import { TaskQueryBarComponent } from './components/task-query-bar.component';
 import { TaskQuery } from './task-query';
-import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, TaskRequest, TaskStatus } from './task.models';
+import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, TaskRequest, TaskStatus, TaskView } from './task.models';
 import { TasksActions } from './store/tasks.actions';
 import { tasksFeature } from './store/tasks.reducer';
 
@@ -19,7 +20,7 @@ import { tasksFeature } from './store/tasks.reducer';
   selector: 'app-task-board',
   standalone: true,
   imports: [AsyncPipe, DatePipe, MatButtonModule, MatButtonToggleModule, MatIconModule, MatProgressBarModule, TaskCardComponent,
-            TaskQueryBarComponent],
+            TaskQueryBarComponent, TaskKanbanComponent],
   template: `
     <div class="page">
       <header class="head">
@@ -62,45 +63,63 @@ import { tasksFeature } from './store/tasks.reducer';
         }
       }
 
-      <div class="toolbar">
-        <mat-button-toggle-group [value]="filter$ | async" (change)="setFilter($event.value)"
-                                 hideSingleSelectionIndicator aria-label="Filter">
-          <mat-button-toggle value="ALL" data-cy="filter-ALL">All</mat-button-toggle>
-          @for (s of statuses; track s) {
-            <mat-button-toggle [value]="s" [attr.data-cy]="'filter-' + s">{{ labels[s] }}</mat-button-toggle>
+      @if (view$ | async; as view) {
+        <div class="toolbar">
+          <mat-button-toggle-group [value]="view" (change)="setView($event.value)"
+                                   hideSingleSelectionIndicator aria-label="View">
+            <mat-button-toggle value="BOARD" data-cy="view-BOARD"><mat-icon>view_kanban</mat-icon> Board</mat-button-toggle>
+            <mat-button-toggle value="LIST" data-cy="view-LIST"><mat-icon>grid_view</mat-icon> List</mat-button-toggle>
+          </mat-button-toggle-group>
+          @if (view === 'LIST') {
+            <mat-button-toggle-group [value]="filter$ | async" (change)="setFilter($event.value)"
+                                     hideSingleSelectionIndicator aria-label="Filter">
+              <mat-button-toggle value="ALL" data-cy="filter-ALL">All</mat-button-toggle>
+              @for (s of statuses; track s) {
+                <mat-button-toggle [value]="s" [attr.data-cy]="'filter-' + s">{{ labels[s] }}</mat-button-toggle>
+              }
+            </mat-button-toggle-group>
           }
-        </mat-button-toggle-group>
-      </div>
-      @if (query$ | async; as query) {
-        <app-task-query-bar class="query" [query]="query" (queryChange)="setQuery($event)" (reset)="resetQuery()" />
-      }
-
-      @if (loading$ | async) { <mat-progress-bar mode="indeterminate" class="loading" /> }
-
-      <div class="grid">
-        @for (task of tasks$ | async; track task.id) {
-          <app-task-card [task]="task"
-                         (statusChange)="changeStatus(task.id, $event)"
-                         (edit)="openForm($event)"
-                         (remove)="remove($event)" />
-        } @empty {
-          @if (queryActive$ | async) {
-            <div class="empty" data-cy="no-match">
-              <span class="empty-icon"><mat-icon>search_off</mat-icon></span>
-              <h3>No tasks match your filters</h3>
-              <p>Try another search or clear the filters.</p>
-              <button mat-stroked-button (click)="resetQuery()"><mat-icon>filter_alt_off</mat-icon> Clear filters</button>
-            </div>
-          } @else {
-            <div class="empty" data-cy="empty">
-              <span class="empty-icon"><mat-icon>checklist</mat-icon></span>
-              <h3>No tasks here yet</h3>
-              <p>Create a task to get started.</p>
-              <button mat-stroked-button (click)="openForm()"><mat-icon>add</mat-icon> New task</button>
-            </div>
-          }
+        </div>
+        @if (query$ | async; as query) {
+          <app-task-query-bar class="query" [query]="query" [labels]="(allLabels$ | async) ?? []"
+                              (queryChange)="setQuery($event)" (reset)="resetQuery()" />
         }
-      </div>
+
+        @if (loading$ | async) { <mat-progress-bar mode="indeterminate" class="loading" /> }
+
+        @if (view === 'BOARD') {
+          <app-task-kanban [columns]="(columns$ | async) ?? []" [filtered]="(queryActive$ | async) ?? false"
+                           (move)="changeStatus($event.task, $event.status)"
+                           (checklistToggle)="toggleItem($event.task.id, $event.toggle)"
+                           (edit)="openForm($event)" (remove)="remove($event)" />
+        } @else {
+          <div class="grid">
+            @for (task of tasks$ | async; track task.id) {
+              <app-task-card [task]="task"
+                             (statusChange)="changeStatus(task, $event)"
+                             (checklistToggle)="toggleItem(task.id, $event)"
+                             (edit)="openForm($event)"
+                             (remove)="remove($event)" />
+            } @empty {
+              @if (queryActive$ | async) {
+                <div class="empty" data-cy="no-match">
+                  <span class="empty-icon"><mat-icon>search_off</mat-icon></span>
+                  <h3>No tasks match your filters</h3>
+                  <p>Try another search or clear the filters.</p>
+                  <button mat-stroked-button (click)="resetQuery()"><mat-icon>filter_alt_off</mat-icon> Clear filters</button>
+                </div>
+              } @else {
+                <div class="empty" data-cy="empty">
+                  <span class="empty-icon"><mat-icon>checklist</mat-icon></span>
+                  <h3>No tasks here yet</h3>
+                  <p>Create a task to get started.</p>
+                  <button mat-stroked-button (click)="openForm()"><mat-icon>add</mat-icon> New task</button>
+                </div>
+              }
+            }
+          </div>
+        }
+      }
     </div>
   `,
   styles: [`
@@ -136,6 +155,8 @@ import { tasksFeature } from './store/tasks.reducer';
     .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .query { display: block; margin-bottom: 16px; }
     .toolbar mat-button-toggle-group { background: var(--tf-surface); border-color: var(--tf-border); }
+    .toolbar mat-icon { font-size: 18px; width: 18px; height: 18px; vertical-align: -4px; margin-right: 2px; }
+
     .loading { margin-bottom: 12px; border-radius: 99px; }
 
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
@@ -162,6 +183,9 @@ export class TaskBoardComponent implements OnInit {
   private readonly dialog = inject(MatDialog);
 
   readonly tasks$ = this.store.select(tasksFeature.selectFilteredTasks);
+  readonly columns$ = this.store.select(tasksFeature.selectColumns);
+  readonly allLabels$ = this.store.select(tasksFeature.selectLabels);
+  readonly view$ = this.store.select(tasksFeature.selectView);
   readonly stats$ = this.store.select(tasksFeature.selectStats);
   readonly filter$ = this.store.select(tasksFeature.selectFilter);
   readonly loading$ = this.store.select(tasksFeature.selectLoading);
@@ -184,6 +208,10 @@ export class TaskBoardComponent implements OnInit {
     this.store.dispatch(TasksActions.setFilter({ filter }));
   }
 
+  setView(view: TaskView): void {
+    this.store.dispatch(TasksActions.setView({ view }));
+  }
+
   setQuery(query: Partial<TaskQuery>): void {
     this.store.dispatch(TasksActions.setQuery({ query }));
   }
@@ -192,8 +220,12 @@ export class TaskBoardComponent implements OnInit {
     this.store.dispatch(TasksActions.resetQuery());
   }
 
-  changeStatus(id: number, status: TaskStatus): void {
-    this.store.dispatch(TasksActions.changeStatus({ id, status }));
+  changeStatus(task: Task, status: TaskStatus): void {
+    if (task.status !== status) this.store.dispatch(TasksActions.changeStatus({ id: task.id, status, from: task.status }));
+  }
+
+  toggleItem(id: number, { itemId, done }: ChecklistToggle): void {
+    this.store.dispatch(TasksActions.toggleChecklistItem({ id, itemId, done }));
   }
 
   remove(id: number): void {
@@ -201,12 +233,18 @@ export class TaskBoardComponent implements OnInit {
   }
 
   openForm(task?: Task): void {
-    this.dialog
-      .open<TaskFormDialogComponent, Task | null, TaskRequest>(TaskFormDialogComponent, { data: task ?? null, width: '520px' })
-      .afterClosed()
-      .pipe(filter((request): request is TaskRequest => !!request))
-      .subscribe((request) =>
-        this.store.dispatch(task ? TasksActions.update({ id: task.id, request }) : TasksActions.create({ request })),
-      );
+    this.allLabels$.pipe(take(1)).subscribe((labels) =>
+      this.dialog
+        .open<TaskFormDialogComponent, TaskFormData, TaskRequest>(TaskFormDialogComponent, {
+          data: { task: task ?? null, labels },
+          width: '560px',
+          maxWidth: '95vw',
+        })
+        .afterClosed()
+        .pipe(filter((request): request is TaskRequest => !!request))
+        .subscribe((request) =>
+          this.store.dispatch(task ? TasksActions.update({ id: task.id, request }) : TasksActions.create({ request })),
+        ),
+    );
   }
 }

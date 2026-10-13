@@ -2,7 +2,7 @@ import { Task } from './task.models';
 import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from './task-query';
 
 const task = (id: number, overrides: Partial<Task> = {}): Task => ({
-  id, title: `Task ${id}`, description: null, status: 'TODO', priority: 'MEDIUM', dueDate: null,
+  id, title: `Task ${id}`, description: null, status: 'TODO', priority: 'MEDIUM', dueDate: null, labels: [], checklist: [],
   createdAt: `2026-01-0${id}`, updatedAt: '', ...overrides,
 });
 
@@ -29,6 +29,13 @@ describe('applyTaskQuery', () => {
   it('filters by priority', () => {
     const tasks = [task(1, { priority: 'HIGH' }), task(2, { priority: 'LOW' }), task(3, { priority: 'HIGH' })];
     expect(run(tasks, { priority: 'HIGH' })).toEqual([3, 1]);
+  });
+
+  it('filters by label and matches labels in search', () => {
+    const tasks = [task(1, { labels: ['bug', 'frontend'] }), task(2, { labels: ['backend'] }), task(3)];
+    expect(run(tasks, { label: 'bug' })).toEqual([1]);
+    expect(run(tasks, { label: 'nope' })).toEqual([]);
+    expect(run(tasks, { search: 'backend' })).toEqual([2]);
   });
 
   it('filters by due date', () => {
@@ -70,5 +77,6 @@ describe('isQueryActive', () => {
     expect(isQueryActive(DEFAULT_TASK_QUERY)).toBe(false);
     expect(isQueryActive({ ...DEFAULT_TASK_QUERY, sort: 'TITLE', search: '   ' })).toBe(false);
     expect(isQueryActive({ ...DEFAULT_TASK_QUERY, due: 'OVERDUE' })).toBe(true);
+    expect(isQueryActive({ ...DEFAULT_TASK_QUERY, label: 'bug' })).toBe(true);
   });
 });

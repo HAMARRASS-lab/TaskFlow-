@@ -25,6 +25,10 @@ export class TaskService {
     return this.http.patch<Task>(`${this.url}/${id}/status`, { status });
   }
 
+  toggleChecklistItem(id: number, itemId: number, done: boolean): Observable<Task> {
+    return this.http.patch<Task>(`${this.url}/${id}/checklist/${itemId}`, { done });
+  }
+
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.url}/${id}`);
   }

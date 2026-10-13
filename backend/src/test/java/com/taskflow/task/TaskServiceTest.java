@@ -1,6 +1,8 @@
 package com.taskflow.task;
 
 import com.taskflow.common.NotFoundException;
+import com.taskflow.task.TaskDtos.ChecklistItemRequest;
+import com.taskflow.task.TaskDtos.ChecklistItemResponse;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
 import com.taskflow.task.TaskDtos.TaskOwnerSummary;
@@ -130,6 +132,93 @@ class TaskServiceTest {
         service.createFor(1L, new TaskRequest("Onboard", null, null, null, null));
 
         verify(repository).save(argThat(t -> t.getOwner() == owner && t.getTitle().equals("Onboard")));
+    }
+
+    @Test
+    void normalizesLabels() {
+        assertThat(TaskService.normalizeLabel("  Front   End ")).isEqualTo("front end");
+    }
+
+    @Test
+    void createStoresDistinctLabelsAndOrderedChecklist() {
+        when(repository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse created = service.create(owner, new TaskRequest("Release", null, null, null, null,
+                List.of("Bug", "bug ", "ui"),
+                List.of(new ChecklistItemRequest(null, " Tag ", false), new ChecklistItemRequest(null, "Notes", true))));
+
+        assertThat(created.labels()).containsExactly("bug", "ui");
+        assertThat(created.checklist()).extracting(ChecklistItemResponse::title).containsExactly("Tag", "Notes");
+        assertThat(created.checklist()).extracting(ChecklistItemResponse::done).containsExactly(false, true);
+    }
+
+    @Test
+    void updateWithoutLabelsOrChecklistKeepsThem() {
+        Task task = taskWithChecklist();
+        task.getLabels().add("bug");
+        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        TaskResponse updated = service.update(owner, 5L, new TaskRequest("Renamed", null, null, null, null));
+
+        assertThat(updated.title()).isEqualTo("Renamed");
+        assertThat(updated.labels()).containsExactly("bug");
+        assertThat(updated.checklist()).hasSize(2);
+    }
+
+    @Test
+    void updateReplacesChecklistKeepingKnownItems() {
+        Task task = taskWithChecklist();
+        ChecklistItem kept = task.getChecklist().get(1);
+        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        service.update(owner, 5L, new TaskRequest("Deploy", null, null, null, null, null,
+                List.of(new ChecklistItemRequest(11L, "Second, renamed", true), new ChecklistItemRequest(null, "New", false))));
+
+        assertThat(task.getChecklist()).hasSize(2);
+        assertThat(task.getChecklist().get(0)).isSameAs(kept);
+        assertThat(kept.getTitle()).isEqualTo("Second, renamed");
+        assertThat(kept.isDone()).isTrue();
+        assertThat(kept.getPosition()).isZero();
+        assertThat(task.getChecklist().get(1).getTask()).isSameAs(task);
+        assertThat(task.getChecklist().get(1).getPosition()).isEqualTo(1);
+    }
+
+    @Test
+    void toggleChecklistItemMarksItDone() {
+        Task task = taskWithChecklist();
+        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        TaskResponse updated = service.toggleChecklistItem(owner, 5L, 10L, true);
+
+        assertThat(updated.checklist().get(0).done()).isTrue();
+    }
+
+    @Test
+    void toggleUnknownChecklistItemThrows() {
+        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(taskWithChecklist()));
+
+        assertThatThrownBy(() -> service.toggleChecklistItem(owner, 5L, 99L, true))
+                .isInstanceOf(NotFoundException.class);
+        verify(repository, never()).saveAndFlush(any());
+    }
+
+    private Task taskWithChecklist() {
+        Task task = new Task();
+        task.setId(5L);
+        task.setTitle("Deploy");
+        task.setOwner(owner);
+        for (long id = 10; id <= 11; id++) {
+            ChecklistItem item = new ChecklistItem();
+            item.setId(id);
+            item.setTask(task);
+            item.setTitle("Item " + id);
+            item.setPosition((int) id - 10);
+            task.getChecklist().add(item);
+        }
+        return task;
     }
 
     private static OwnerStatusCount row(Long id, String name, TaskStatus status, long count) {
