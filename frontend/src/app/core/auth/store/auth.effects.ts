@@ -74,6 +74,15 @@ export const authSuccess$ = createEffect(
   { functional: true, dispatch: false },
 );
 
+export const userUpdated$ = createEffect(
+  (actions$ = inject(Actions), auth = inject(AuthService)) =>
+    actions$.pipe(
+      ofType(AuthActions.userUpdated),
+      tap(({ user }) => auth.updateStoredUser(user)),
+    ),
+  { functional: true, dispatch: false },
+);
+
 export const logout$ = createEffect(
   (actions$ = inject(Actions), auth = inject(AuthService), router = inject(Router)) =>
     actions$.pipe(

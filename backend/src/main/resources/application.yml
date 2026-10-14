@@ -12,6 +12,18 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  # SMTP server, used when app.mail.enabled is true (e.g. Mailpit locally, Brevo/SendGrid/Gmail in production)
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 server:
   port: ${PORT:8080}
@@ -26,6 +38,17 @@ app:
   admin:
     # Comma-separated emails granted the ADMIN role (at startup and on registration).
     emails: ${ADMIN_EMAILS:h.hamarrass1@gmail.com}
+  # Public URL of the app, used in emailed links and in the calendar feed URL.
+  frontend-url: ${FRONTEND_URL:http://localhost:4200}
+  # Time zone of meeting times (stored without zone) and of the daily digest schedule.
+  timezone: ${APP_TIMEZONE:Europe/Paris}
+  mail:
+    # When false, emails are only written to the log (links included): handy without an SMTP server.
+    enabled: ${MAIL_ENABLED:false}
+    from: ${MAIL_FROM:TaskFlow <no-reply@taskflow.local>}
+  digest:
+    # Spring cron (sec min hour day month weekday); "-" disables the digest.
+    cron: ${DIGEST_CRON:0 0 7 * * MON-FRI}
 
 management:
   endpoints:
@@ -36,6 +59,10 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    # an unreachable SMTP server must not mark the app DOWN (emails are best-effort)
+    mail:
+      enabled: false
 
 springdoc:
   swagger-ui:

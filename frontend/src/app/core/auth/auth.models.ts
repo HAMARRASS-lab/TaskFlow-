@@ -3,6 +3,10 @@ export interface User {
   email: string;
   fullName: string;
   role: 'USER' | 'ADMIN';
+  /** Whether the email address was confirmed through the emailed link. */
+  emailVerified?: boolean;
+  /** Whether the daily email digest is on (sent only once the email is verified). */
+  digestEnabled?: boolean;
 }
 
 export interface LoginRequest {

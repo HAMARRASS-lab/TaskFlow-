@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { API_URL } from '../../core/api';
-import { Meeting, MeetingRequest, ParticipantStatus } from './meeting.models';
+import { CalendarFeed, Meeting, MeetingRequest, ParticipantStatus } from './meeting.models';
 
 @Injectable({ providedIn: 'root' })
 export class MeetingService {
@@ -33,5 +33,24 @@ export class MeetingService {
 
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.url}/${id}`);
+  }
+
+  /** The meeting as an iCalendar file (fetched as a blob: the request needs the JWT header). */
+  downloadIcs(id: number): Observable<Blob> {
+    return this.http.get(`${this.url}/${id}/ics`, { responseType: 'blob' });
+  }
+
+  /** My private calendar subscription URL, `null` when none is enabled. */
+  getFeed(): Observable<CalendarFeed> {
+    return this.http.get<CalendarFeed>(`${API_URL}/calendar/feed`);
+  }
+
+  /** Creates a new subscription URL; the previous one stops working. */
+  regenerateFeed(): Observable<CalendarFeed> {
+    return this.http.post<CalendarFeed>(`${API_URL}/calendar/feed`, {});
+  }
+
+  disableFeed(): Observable<void> {
+    return this.http.delete<void>(`${API_URL}/calendar/feed`);
   }
 }

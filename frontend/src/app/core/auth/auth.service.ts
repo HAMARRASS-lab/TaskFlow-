@@ -22,6 +22,27 @@ export class AuthService {
     return this.http.get<User>(`${API_URL}/auth/me`);
   }
 
+  /** Emails a reset link; succeeds whether or not the address is registered. */
+  forgotPassword(email: string): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/forgot-password`, { email });
+  }
+
+  resetPassword(token: string, password: string): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/reset-password`, { token, password });
+  }
+
+  verifyEmail(token: string): Observable<User> {
+    return this.http.post<User>(`${API_URL}/auth/verify-email`, { token });
+  }
+
+  resendVerification(): Observable<void> {
+    return this.http.post<void>(`${API_URL}/auth/verify-email/resend`, {});
+  }
+
+  updatePreferences(preferences: { digestEnabled: boolean }): Observable<User> {
+    return this.http.patch<User>(`${API_URL}/auth/me/preferences`, preferences);
+  }
+
   saveSession(response: AuthResponse): void {
     const session: StoredSession = {
       token: response.token,

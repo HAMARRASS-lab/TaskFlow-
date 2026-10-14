@@ -33,6 +33,17 @@ public class User implements UserDetails {
     @Column(nullable = false, length = 20)
     private Role role = Role.USER;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
+    /** Whether the user receives the daily email digest (only sent once the email is verified). */
+    @Column(name = "digest_enabled", nullable = false)
+    private boolean digestEnabled = true;
+
+    /** Secret token in the user's private iCalendar feed URL; {@code null} when no feed is enabled. */
+    @Column(name = "calendar_feed_token", unique = true, length = 64)
+    private String calendarFeedToken;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -99,6 +110,30 @@ public class User implements UserDetails {
 
     public void setRole(Role role) {
         this.role = role;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
+    }
+
+    public boolean isDigestEnabled() {
+        return digestEnabled;
+    }
+
+    public void setDigestEnabled(boolean digestEnabled) {
+        this.digestEnabled = digestEnabled;
+    }
+
+    public String getCalendarFeedToken() {
+        return calendarFeedToken;
+    }
+
+    public void setCalendarFeedToken(String calendarFeedToken) {
+        this.calendarFeedToken = calendarFeedToken;
     }
 
     public LocalDateTime getCreatedAt() {

@@ -3,6 +3,7 @@ package com.taskflow.task;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -13,6 +14,10 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByOwnerIdAndStatusOrderByCreatedAtDesc(Long ownerId, TaskStatus status);
 
     Optional<Task> findByIdAndOwnerId(Long id, Long ownerId);
+
+    /** Open tasks due on or before {@code until} (overdue ones included), soonest first. */
+    List<Task> findByOwnerIdAndStatusNotAndDueDateLessThanEqualOrderByDueDateAsc(
+            Long ownerId, TaskStatus status, LocalDate until);
 
     /** One row per (owner, status) pair that has at least one task. */
     @Query("""
