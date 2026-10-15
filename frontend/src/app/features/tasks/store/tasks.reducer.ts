@@ -1,6 +1,7 @@
 import { createEntityAdapter, EntityState } from '@ngrx/entity';
 import { createFeature, createReducer, createSelector, on } from '@ngrx/store';
 import { AuthActions } from '../../../core/auth/store/auth.actions';
+import { authFeature } from '../../../core/auth/store/auth.reducer';
 import { TASK_STATUSES, Task, TaskFilter, TaskStatus, TaskView, collectLabels } from '../task.models';
 import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from '../task-query';
 import { TasksActions } from './tasks.actions';
@@ -35,7 +36,7 @@ export const tasksFeature = createFeature({
     on(TasksActions.loadSuccess, (state, { tasks }) => tasksAdapter.setAll(tasks, { ...state, loading: false })),
     on(TasksActions.createSuccess, (state, { task }) => tasksAdapter.addOne(task, state)),
     on(TasksActions.updateSuccess, (state, { task }) => tasksAdapter.upsertOne(task, state)),
-    on(TasksActions.deleteSuccess, (state, { id }) => tasksAdapter.removeOne(id, state)),
+    on(TasksActions.deleteSuccess, TasksActions.leftBoard, (state, { id }) => tasksAdapter.removeOne(id, state)),
     on(TasksActions.requestFailure, (state, { error }) => ({ ...state, loading: false, error })),
     on(TasksActions.changeStatus, (state, { id, status }) => tasksAdapter.updateOne({ id, changes: { status } }, state)),
     on(TasksActions.changeStatusFailure, (state, { id, status, error }) =>
@@ -53,9 +54,13 @@ export const tasksFeature = createFeature({
   ),
   extraSelectors: ({ selectTasksState, selectFilter, selectQuery }) => {
     const selectAllTasks = createSelector(selectTasksState, selectAll);
-    const selectQueriedTasks = createSelector(selectAllTasks, selectQuery, applyTaskQuery);
+    const selectMeId = createSelector(authFeature.selectUser, (user) => user?.id ?? null);
+    const selectQueriedTasks = createSelector(selectAllTasks, selectQuery, selectMeId,
+      (tasks, query, me) => applyTaskQuery(tasks, query, new Date(), me));
     return {
       selectAllTasks,
+      /** The signed-in user's id, to tell which tasks they can change. */
+      selectMeId,
       /** Kanban columns: search, filters and sort apply, the status filter does not. */
       selectColumns: createSelector(selectQueriedTasks, (tasks) =>
         TASK_STATUSES.map((status) => ({ status, tasks: tasks.filter((t) => t.status === status) })),

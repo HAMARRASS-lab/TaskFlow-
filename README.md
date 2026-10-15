@@ -94,7 +94,9 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 
 All `/api/tasks`, `/api/users`, `/api/meetings` and `/api/calendar/feed` (except the `{token}` feed itself) endpoints require `Authorization: Bearer <token>`; `/api/admin/**` also requires the `ADMIN` role (403 otherwise).
 
-**Admins** — the emails in `ADMIN_EMAILS` get the `ADMIN` role at startup (existing accounts) and when they register. Admins see an **Admin** page (add / edit / delete users, assign a new task to someone) and can reassign any task from the Team page.
+**Admins** — the emails in `ADMIN_EMAILS` get the `ADMIN` role at startup (existing accounts) and when they register. Admins see an **Admin** page (add / edit / delete users, create a task owned by someone) and can transfer any task's ownership from the Team page.
+
+**Assignees and watchers** — a task's creator (its *owner*) can assign it to a teammate (`assigneeId`) and add watchers (`watcherIds`, up to 20). A task shows up on the board of its owner, its assignee and its watchers. The owner and the assignee can edit it, move it and tick its checklist; only the owner can delete it; watchers see it read-only. Anyone can follow a task (`PUT`/`DELETE /api/tasks/{id}/watch`), e.g. from the Team page's task details. Cards show the assignee's avatar and the number of watchers, and the board filters *All my tasks / Assigned to me / Created by me / Watching*. The daily digest goes to the person responsible: the assignee, or the owner while the task is unassigned.
 
 **Board, labels and checklists** — the task board opens as a Kanban (To do / In progress / Done): drag a card to another column to change its status (applied immediately, rolled back if the API refuses). A List view keeps the card grid with the status filter. Tasks carry up to 10 free-form labels (`labels: ["bug", "frontend"]`, stored trimmed and lower-cased, shown as coloured chips, filterable) and a checklist of up to 50 subtasks (`checklist: [{id?, title, done}]` — send an existing item's `id` to keep it), shown on the card as "3/5 done".
 

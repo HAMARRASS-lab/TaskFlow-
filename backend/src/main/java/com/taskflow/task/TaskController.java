@@ -58,6 +58,17 @@ public class TaskController {
         return taskService.toggleChecklistItem(user, id, itemId, request.done());
     }
 
+    /** Follow the task: it then shows up on the caller's board. */
+    @PutMapping("/{id}/watch")
+    public TaskResponse watch(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        return taskService.setWatching(user, id, true);
+    }
+
+    @DeleteMapping("/{id}/watch")
+    public TaskResponse unwatch(@AuthenticationPrincipal User user, @PathVariable Long id) {
+        return taskService.setWatching(user, id, false);
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@AuthenticationPrincipal User user, @PathVariable Long id) {

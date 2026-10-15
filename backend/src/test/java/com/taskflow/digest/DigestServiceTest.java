@@ -65,7 +65,7 @@ class DigestServiceTest {
 
     @Test
     void listsOverdueAndUpcomingTasksAndTodaysMeetings() {
-        when(tasks.findByOwnerIdAndStatusNotAndDueDateLessThanEqualOrderByDueDateAsc(1L, TaskStatus.DONE, TODAY.plusDays(7)))
+        when(tasks.findDueForResponsible(1L, TaskStatus.DONE, TODAY.plusDays(7)))
                 .thenReturn(List.of(task("Send invoice", TODAY.minusDays(2)), task("Ship v2", TODAY.plusDays(1))));
         User bob = new User("bob@test.com", "hash", "Bob");
         bob.setId(2L);
@@ -85,7 +85,7 @@ class DigestServiceTest {
 
     @Test
     void sendsNothingOnAnEmptyDay() {
-        when(tasks.findByOwnerIdAndStatusNotAndDueDateLessThanEqualOrderByDueDateAsc(any(), any(), any()))
+        when(tasks.findDueForResponsible(any(), any(), any()))
                 .thenReturn(List.of());
         when(meetings.findVisible(any(), any(), any(), any())).thenReturn(List.of());
 

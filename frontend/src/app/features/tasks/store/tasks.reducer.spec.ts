@@ -4,7 +4,8 @@ import { TasksActions } from './tasks.actions';
 import { initialTasksState, tasksFeature } from './tasks.reducer';
 
 const task = (id: number, status: Task['status'], createdAt: string): Task => ({
-  id, status, createdAt, title: `Task ${id}`, description: null, priority: 'MEDIUM', dueDate: null, labels: [], checklist: [], updatedAt: createdAt,
+  id, status, createdAt, title: `Task ${id}`, description: null, priority: 'MEDIUM', dueDate: null, labels: [], checklist: [],
+  updatedAt: createdAt, owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [],
 });
 
 const reducer = tasksFeature.reducer;
@@ -32,6 +33,12 @@ describe('tasks reducer', () => {
 
     state = reducer(state, TasksActions.deleteSuccess({ id: 2 }));
     expect(state.ids).not.toContain(2);
+  });
+
+  it('drops a task that left the board', () => {
+    let state = reducer(initialTasksState, TasksActions.loadSuccess({ tasks: [task(1, 'TODO', 'a'), task(2, 'DONE', 'b')] }));
+    state = reducer(state, TasksActions.leftBoard({ id: 1 }));
+    expect(state.ids).toEqual([2]);
   });
 
   it('records errors', () => {
@@ -70,14 +77,15 @@ describe('tasks reducer', () => {
 describe('tasks selectors', () => {
   const tasks = [task(1, 'TODO', '2026-01-01'), task(2, 'DONE', '2026-01-03'), task(3, 'DONE', '2026-01-02')];
   const state = reducer(initialTasksState, TasksActions.loadSuccess({ tasks }));
-  const root = { tasks: state };
+  const auth = { user: { id: 1, email: 'alice@test.com', fullName: 'Alice Martin', role: 'USER' as const }, loading: false, error: null };
+  const root = { auth, tasks: state };
 
   it('computes stats', () => {
     expect(tasksFeature.selectStats(root)).toEqual({ total: 3, todo: 1, inProgress: 0, done: 2 });
   });
 
   it('filters by status', () => {
-    const filtered = { tasks: reducer(state, TasksActions.setFilter({ filter: 'DONE' })) };
+    const filtered = { auth, tasks: reducer(state, TasksActions.setFilter({ filter: 'DONE' })) };
     expect(tasksFeature.selectFilteredTasks(filtered).map((t) => t.id)).toEqual([2, 3]);
     expect(tasksFeature.selectFilteredTasks(root)).toHaveLength(3);
   });
@@ -85,7 +93,7 @@ describe('tasks selectors', () => {
   it('groups tasks into kanban columns, applying the query but not the status filter', () => {
     let s = reducer(state, TasksActions.setFilter({ filter: 'TODO' }));
     s = reducer(s, TasksActions.setQuery({ query: { sort: 'OLDEST' } }));
-    const columns = tasksFeature.selectColumns({ tasks: s });
+    const columns = tasksFeature.selectColumns({ auth, tasks: s });
     expect(columns.map((c) => [c.status, c.tasks.map((t) => t.id)])).toEqual([
       ['TODO', [1]], ['IN_PROGRESS', []], ['DONE', [3, 2]],
     ]);
@@ -95,19 +103,29 @@ describe('tasks selectors', () => {
     const labelled = reducer(initialTasksState, TasksActions.loadSuccess({
       tasks: [{ ...tasks[0], labels: ['ui', 'bug'] }, { ...tasks[1], labels: ['bug'] }],
     }));
-    expect(tasksFeature.selectLabels({ tasks: labelled })).toEqual(['bug', 'ui']);
+    expect(tasksFeature.selectLabels({ auth, tasks: labelled })).toEqual(['bug', 'ui']);
   });
 
   it('combines the status filter with the search query and sort', () => {
     let s = reducer(state, TasksActions.setFilter({ filter: 'DONE' }));
     s = reducer(s, TasksActions.setQuery({ query: { search: 'task 3' } }));
-    expect(tasksFeature.selectFilteredTasks({ tasks: s }).map((t) => t.id)).toEqual([3]);
-    expect(tasksFeature.selectQueryActive({ tasks: s })).toBe(true);
+    expect(tasksFeature.selectFilteredTasks({ auth, tasks: s }).map((t) => t.id)).toEqual([3]);
+    expect(tasksFeature.selectQueryActive({ auth, tasks: s })).toBe(true);
 
     s = reducer(s, TasksActions.setQuery({ query: { sort: 'OLDEST' } }));
     expect(s.query.search).toBe('task 3');
     s = reducer(s, TasksActions.resetQuery());
-    expect(s.query).toEqual({ search: '', priority: 'ALL', label: null, due: 'ALL', sort: 'OLDEST' });
-    expect(tasksFeature.selectFilteredTasks({ tasks: s }).map((t) => t.id)).toEqual([3, 2]);
+    expect(s.query).toEqual({ search: '', priority: 'ALL', label: null, due: 'ALL', involvement: 'ALL', sort: 'OLDEST' });
+    expect(tasksFeature.selectFilteredTasks({ auth, tasks: s }).map((t) => t.id)).toEqual([3, 2]);
+  });
+
+  it("applies the involvement filter for the signed-in user", () => {
+    const bob = { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' };
+    const mixed = reducer(initialTasksState, TasksActions.loadSuccess({
+      tasks: [tasks[0], { ...tasks[1], owner: bob, assignee: auth.user }, { ...tasks[2], owner: bob, watchers: [auth.user] }],
+    }));
+    const s = reducer(mixed, TasksActions.setQuery({ query: { involvement: 'ASSIGNED' } }));
+    expect(tasksFeature.selectFilteredTasks({ auth, tasks: s }).map((t) => t.id)).toEqual([2]);
+    expect(tasksFeature.selectMeId({ auth, tasks: s })).toBe(1);
   });
 });

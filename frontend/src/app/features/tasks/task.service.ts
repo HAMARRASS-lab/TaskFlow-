@@ -29,6 +29,12 @@ export class TaskService {
     return this.http.patch<Task>(`${this.url}/${id}/checklist/${itemId}`, { done });
   }
 
+  /** Follow (or stop following) a task. */
+  setWatching(id: number, watching: boolean): Observable<Task> {
+    const url = `${this.url}/${id}/watch`;
+    return watching ? this.http.put<Task>(url, {}) : this.http.delete<Task>(url);
+  }
+
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.url}/${id}`);
   }

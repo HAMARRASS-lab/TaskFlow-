@@ -6,7 +6,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { TASK_PRIORITIES } from '../task.models';
 import { LabelChipComponent } from './label-chip.component';
-import { DUE_FILTER_LABELS, DueFilter, SORT_LABELS, TaskQuery, TaskSort, isQueryActive } from '../task-query';
+import {
+  DUE_FILTER_LABELS, DueFilter, INVOLVEMENT_LABELS, InvolvementFilter, SORT_LABELS, TaskQuery, TaskSort, isQueryActive,
+} from '../task-query';
 
 /** Search box + priority / label / due date / sort selects, shared by the board and the Team page. */
 @Component({
@@ -20,6 +22,16 @@ import { DUE_FILTER_LABELS, DueFilter, SORT_LABELS, TaskQuery, TaskSort, isQuery
         <input matInput type="search" placeholder="Search tasks" aria-label="Search tasks"
                [value]="query.search" (input)="patch({ search: $any($event.target).value })" data-cy="task-search" />
       </mat-form-field>
+
+      @if (showInvolvement) {
+        <mat-form-field appearance="outline" subscriptSizing="dynamic">
+          <mat-icon matPrefix>person_search</mat-icon>
+          <mat-select [value]="query.involvement" (selectionChange)="patch({ involvement: $event.value })"
+                      aria-label="Show" data-cy="involvement-filter">
+            @for (i of involvements; track i) { <mat-option [value]="i">{{ involvementLabels[i] }}</mat-option> }
+          </mat-select>
+        </mat-form-field>
+      }
 
       <mat-form-field appearance="outline" subscriptSizing="dynamic">
         <mat-select [value]="query.priority" (selectionChange)="patch({ priority: $event.value })"
@@ -75,6 +87,8 @@ export class TaskQueryBarComponent {
   @Input({ required: true }) query!: TaskQuery;
   /** Labels offered by the label filter (hidden when there are none). */
   @Input() labels: string[] = [];
+  /** Offer the "Assigned to me / Created by me / Watching" filter (the signed-in user's board). */
+  @Input() showInvolvement = false;
   @Output() queryChange = new EventEmitter<Partial<TaskQuery>>();
   @Output() reset = new EventEmitter<void>();
 
@@ -83,6 +97,8 @@ export class TaskQueryBarComponent {
   readonly dueLabels = DUE_FILTER_LABELS;
   readonly sorts = Object.keys(SORT_LABELS) as TaskSort[];
   readonly sortLabels = SORT_LABELS;
+  readonly involvements = Object.keys(INVOLVEMENT_LABELS) as InvolvementFilter[];
+  readonly involvementLabels = INVOLVEMENT_LABELS;
 
   get active(): boolean {
     return isQueryActive(this.query);

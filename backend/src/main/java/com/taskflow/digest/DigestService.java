@@ -39,7 +39,7 @@ public class DigestService {
     /** The digest body for {@code today}, or empty when there is nothing to report (no email is sent then). */
     @Transactional(readOnly = true)
     public Optional<String> build(User user, LocalDate today) {
-        List<Task> open = tasks.findByOwnerIdAndStatusNotAndDueDateLessThanEqualOrderByDueDateAsc(
+        List<Task> open = tasks.findDueForResponsible(
                 user.getId(), TaskStatus.DONE, today.plusDays(UPCOMING_DAYS));
         List<Task> overdue = open.stream().filter(t -> t.getDueDate().isBefore(today)).toList();
         List<Task> upcoming = open.stream().filter(t -> !t.getDueDate().isBefore(today)).toList();

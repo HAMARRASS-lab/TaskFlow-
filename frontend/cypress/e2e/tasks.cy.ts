@@ -21,7 +21,7 @@ describe('Task board', () => {
     cy.intercept('PATCH', '/api/tasks/3/status', (req) => {
       req.reply({ statusCode: 200, body: { id: 3, title: 'Write Cypress tests', description: 'E2E coverage',
         priority: 'LOW', dueDate: null, labels: ['frontend'], checklist: [], createdAt: '2026-09-22T10:00:00',
-        updatedAt: '2026-10-03T10:00:00', ...req.body } });
+        updatedAt: '2026-10-03T10:00:00', owner: { id: 1, fullName: 'Alice', email: 'alice@test.com' }, assignee: null, watchers: [], ...req.body } });
     }).as('status');
 
     cy.get('[data-cy=column-TODO] [data-cy=task-card]').first().scrollIntoView();
@@ -67,7 +67,7 @@ describe('Task board', () => {
     cy.intercept('PATCH', '/api/tasks/2/checklist/22', { statusCode: 200, body: { id: 2, title: 'Implement JWT auth',
       description: null, status: 'IN_PROGRESS', priority: 'HIGH', dueDate: null, labels: ['backend', 'security'],
       checklist: [{ id: 21, title: 'Login endpoint', done: true }, { id: 22, title: 'Token refresh', done: true }],
-      createdAt: '2026-09-21T10:00:00', updatedAt: '2026-10-03T10:00:00' } }).as('toggle');
+      createdAt: '2026-09-21T10:00:00', updatedAt: '2026-10-03T10:00:00', owner: { id: 1, fullName: 'Alice', email: 'alice@test.com' }, assignee: null, watchers: [] } }).as('toggle');
 
     cy.get('[data-cy=column-IN_PROGRESS] [data-cy=checklist-progress]').should('contain', '1/2 done').click();
     cy.get('[data-cy=column-IN_PROGRESS] [data-cy=checklist-item]').contains('Token refresh').click();
@@ -105,7 +105,7 @@ describe('Task board', () => {
       req.reply({
         statusCode: 201,
         body: { id: 4, status: 'TODO', description: null, dueDate: null, createdAt: '2026-10-03T10:00:00',
-                updatedAt: '2026-10-03T10:00:00', ...req.body,
+                updatedAt: '2026-10-03T10:00:00', owner: { id: 1, fullName: 'Alice', email: 'alice@test.com' }, assignee: null, watchers: [], ...req.body,
                 checklist: req.body.checklist.map((i: object, n: number) => ({ ...i, id: 40 + n })) },
       });
     }).as('create');
@@ -126,6 +126,36 @@ describe('Task board', () => {
     });
     cy.get('[data-cy=task-card]').should('have.length', 4).first().should('contain', 'Deploy to the cloud')
       .and('contain', '0/2 done').and('contain', 'devops');
+  });
+
+  it('assigns a new task to a teammate and shows their avatar', () => {
+    cy.intercept('POST', '/api/tasks', (req) => {
+      req.reply({ statusCode: 201, body: { id: 5, status: 'TODO', description: null, dueDate: null, labels: [], checklist: [],
+        createdAt: '2026-10-04T10:00:00', updatedAt: '2026-10-04T10:00:00', ...req.body,
+        owner: { id: 1, fullName: 'Alice', email: 'alice@test.com' },
+        assignee: { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' }, watchers: [] } });
+    }).as('create');
+
+    cy.get('[data-cy=new-task]').click();
+    cy.get('[data-cy=task-title]').type('Review the PR');
+    cy.get('[data-cy=task-assignee-select]').click();
+    cy.get('mat-option').contains('Bob Durand').click();
+    cy.get('[data-cy=task-save]').click();
+
+    cy.wait('@create').its('request.body').should('deep.include', { assigneeId: 2, watcherIds: [] });
+    cy.get('[data-cy=task-card]').first().find('[data-cy=task-assignee]').should('contain', 'BD');
+  });
+
+  it('filters the tasks assigned to me, and hides delete on tasks I did not create', () => {
+    cy.get('[data-cy=involvement-filter]').click();
+    cy.get('mat-option').contains('Assigned to me').click();
+    cy.get('[data-cy=task-card]').should('have.length', 1).and('contain', 'Implement JWT auth')
+      .find('[data-cy=delete-task]').should('not.exist');
+    cy.get('[data-cy=task-card]').find('[data-cy=edit-task]').should('exist');
+
+    cy.get('[data-cy=involvement-filter]').click();
+    cy.get('mat-option').contains('Created by me').click();
+    cy.get('[data-cy=task-card]').should('have.length', 2);
   });
 
   it('deletes a task', () => {

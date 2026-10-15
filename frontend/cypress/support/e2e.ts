@@ -4,6 +4,10 @@ Cypress.Commands.add('loginAsFakeUser', () => {
   // The app refreshes the user and polls invitations on startup; a 401 there would log the fake user out.
   cy.intercept('GET', '/api/auth/me', user);
   cy.intercept('GET', '/api/meetings/invitations', []);
+  cy.intercept('GET', '/api/users', [
+    { id: 1, email: 'alice@test.com', fullName: 'Alice' },
+    { id: 2, email: 'bob@test.com', fullName: 'Bob Durand' },
+  ]);
   window.localStorage.setItem(
     'taskflow.auth',
     JSON.stringify({

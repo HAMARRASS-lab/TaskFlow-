@@ -6,7 +6,7 @@ import { TaskKanbanComponent } from './task-kanban.component';
 
 const task = (id: number, status: TaskStatus): Task => ({
   id, status, title: `Task ${id}`, description: null, priority: 'MEDIUM', dueDate: null, labels: [], checklist: [],
-  createdAt: '', updatedAt: '',
+  createdAt: '', updatedAt: '', owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [],
 });
 
 describe('TaskKanbanComponent', () => {
@@ -21,6 +21,7 @@ describe('TaskKanbanComponent', () => {
     TestBed.configureTestingModule({ imports: [TaskKanbanComponent], providers: [provideNoopAnimations()] });
     fixture = TestBed.createComponent(TaskKanbanComponent);
     fixture.componentRef.setInput('columns', columns);
+    fixture.componentRef.setInput('meId', 1);
     fixture.detectChanges();
   });
 
@@ -49,6 +50,26 @@ describe('TaskKanbanComponent', () => {
     expect(spy).not.toHaveBeenCalled();
     drop(todo, done);
     expect(spy).toHaveBeenCalledWith({ task: columns[0].tasks[0], status: 'DONE' });
+  });
+
+  it("makes a watched task read-only: no drag, no edit, but 'stop watching'", () => {
+    const watched = { ...task(4, 'IN_PROGRESS'), owner: { id: 9, fullName: 'Bob Durand', email: 'bob@test.com' }, watchers: [{ id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }] };
+    const assigned = { ...task(5, 'IN_PROGRESS'), owner: { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' }, assignee: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' } };
+    fixture.componentRef.setInput('columns', [columns[0], { status: 'IN_PROGRESS' as const, tasks: [watched, assigned] }, columns[2]]);
+    fixture.detectChanges();
+    const spy = jest.fn();
+    fixture.componentInstance.unwatch.subscribe(spy);
+
+    const [watchedCard, assignedCard] = fixture.nativeElement.querySelectorAll('[data-cy=column-IN_PROGRESS] app-task-card');
+    expect(watchedCard.classList).not.toContain('draggable');
+    expect(watchedCard.querySelector('[data-cy=edit-task]')).toBeNull();
+    watchedCard.querySelector('[data-cy=unwatch-task]').click();
+    expect(spy).toHaveBeenCalledWith(4);
+
+    // the assignee can drag and edit, only the owner deletes
+    expect(assignedCard.classList).toContain('draggable');
+    expect(assignedCard.querySelector('[data-cy=edit-task]')).not.toBeNull();
+    expect(assignedCard.querySelector('[data-cy=delete-task]')).toBeNull();
   });
 
   it('forwards status changes from the card select', () => {

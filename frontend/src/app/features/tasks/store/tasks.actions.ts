@@ -19,6 +19,10 @@ export const TasksActions = createActionGroup({
     'Update Success': props<{ task: Task }>(),
     Delete: props<{ id: number }>(),
     'Delete Success': props<{ id: number }>(),
+    /** Stop following a task (it leaves the board). */
+    Unwatch: props<{ id: number }>(),
+    /** The task no longer concerns the user (unwatched, or they unassigned themselves): drop it from the board. */
+    'Left Board': props<{ id: number }>(),
     'Request Failure': props<{ error: string }>(),
     'Set Filter': props<{ filter: TaskFilter }>(),
     'Set View': props<{ view: TaskView }>(),

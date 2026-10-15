@@ -3,7 +3,7 @@ import { DEFAULT_TASK_QUERY, TaskQuery, applyTaskQuery, isQueryActive } from './
 
 const task = (id: number, overrides: Partial<Task> = {}): Task => ({
   id, title: `Task ${id}`, description: null, status: 'TODO', priority: 'MEDIUM', dueDate: null, labels: [], checklist: [],
-  createdAt: `2026-01-0${id}`, updatedAt: '', ...overrides,
+  createdAt: `2026-01-0${id}`, updatedAt: '', owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [], ...overrides,
 });
 
 const now = new Date(2026, 9, 10); // 2026-10-10, local time
@@ -78,5 +78,33 @@ describe('isQueryActive', () => {
     expect(isQueryActive({ ...DEFAULT_TASK_QUERY, sort: 'TITLE', search: '   ' })).toBe(false);
     expect(isQueryActive({ ...DEFAULT_TASK_QUERY, due: 'OVERDUE' })).toBe(true);
     expect(isQueryActive({ ...DEFAULT_TASK_QUERY, label: 'bug' })).toBe(true);
+  });
+});
+
+describe('involvement filter', () => {
+  const alice = { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, bob = { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' };
+  const tasks = [
+    task(1, { owner: alice }),
+    task(2, { owner: bob, assignee: alice }),
+    task(3, { owner: bob, watchers: [alice] }),
+    task(4, { owner: alice, assignee: bob }),
+  ];
+  const run = (involvement: TaskQuery['involvement'], me: number | null) =>
+    applyTaskQuery(tasks, { ...DEFAULT_TASK_QUERY, involvement }, now, me).map((t) => t.id).sort();
+
+  it("keeps the tasks matching how the user is involved", () => {
+    expect(run('ALL', 1)).toEqual([1, 2, 3, 4]);
+    expect(run('ASSIGNED', 1)).toEqual([2]);
+    expect(run('CREATED', 1)).toEqual([1, 4]);
+    expect(run('WATCHING', 1)).toEqual([3]);
+  });
+
+  it('is ignored without a signed-in user and counts as an active filter', () => {
+    expect(run('ASSIGNED', null)).toEqual([1, 2, 3, 4]);
+    expect(isQueryActive({ ...DEFAULT_TASK_QUERY, involvement: 'WATCHING' })).toBe(true);
+  });
+
+  it("searches the assignee's name", () => {
+    expect(applyTaskQuery(tasks, { ...DEFAULT_TASK_QUERY, search: 'durand' }, now).map((t) => t.id)).toEqual([4]);
   });
 });

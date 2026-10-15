@@ -44,6 +44,17 @@ public class Task {
     @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
+    /** The teammate responsible for the task; {@code null} = the owner. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignee_id")
+    private User assignee;
+
+    @ManyToMany
+    @JoinTable(name = "task_watchers", joinColumns = @JoinColumn(name = "task_id"),
+            inverseJoinColumns = @JoinColumn(name = "user_id"))
+    @BatchSize(size = 50)
+    private Set<User> watchers = new HashSet<>();
+
     @ElementCollection
     @CollectionTable(name = "task_labels", joinColumns = @JoinColumn(name = "task_id"))
     @Column(name = "name", nullable = false, length = 30)
@@ -91,6 +102,9 @@ public class Task {
     public void setDueDate(LocalDate dueDate) { this.dueDate = dueDate; }
     public User getOwner() { return owner; }
     public void setOwner(User owner) { this.owner = owner; }
+    public User getAssignee() { return assignee; }
+    public void setAssignee(User assignee) { this.assignee = assignee; }
+    public Set<User> getWatchers() { return watchers; }
     public Set<String> getLabels() { return labels; }
     public List<ChecklistItem> getChecklist() { return checklist; }
     public LocalDateTime getCreatedAt() { return createdAt; }

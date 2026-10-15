@@ -1,6 +1,7 @@
 package com.taskflow.user;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 import org.springframework.security.core.GrantedAuthority;
@@ -13,6 +14,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
+@BatchSize(size = 50)
 public class User implements UserDetails {
 
     @Id

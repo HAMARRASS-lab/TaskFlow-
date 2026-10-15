@@ -12,7 +12,9 @@ import { TaskKanbanComponent } from './components/task-kanban.component';
 import { TaskFormData, TaskFormDialogComponent } from './components/task-form-dialog.component';
 import { TaskQueryBarComponent } from './components/task-query-bar.component';
 import { TaskQuery } from './task-query';
-import { STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, TaskRequest, TaskStatus, TaskView } from './task.models';
+import {
+  STATUS_LABELS, TASK_STATUSES, Task, TaskFilter, TaskRequest, TaskStatus, TaskView, canDeleteTask, canEditTask,
+} from './task.models';
 import { TasksActions } from './store/tasks.actions';
 import { tasksFeature } from './store/tasks.reducer';
 
@@ -81,7 +83,7 @@ import { tasksFeature } from './store/tasks.reducer';
           }
         </div>
         @if (query$ | async; as query) {
-          <app-task-query-bar class="query" [query]="query" [labels]="(allLabels$ | async) ?? []"
+          <app-task-query-bar class="query" [query]="query" [labels]="(allLabels$ | async) ?? []" [showInvolvement]="true"
                               (queryChange)="setQuery($event)" (reset)="resetQuery()" />
         }
 
@@ -89,17 +91,20 @@ import { tasksFeature } from './store/tasks.reducer';
 
         @if (view === 'BOARD') {
           <app-task-kanban [columns]="(columns$ | async) ?? []" [filtered]="(queryActive$ | async) ?? false"
+                           [meId]="meId$ | async"
                            (move)="changeStatus($event.task, $event.status)"
                            (checklistToggle)="toggleItem($event.task.id, $event.toggle)"
-                           (edit)="openForm($event)" (remove)="remove($event)" />
+                           (edit)="openForm($event)" (remove)="remove($event)" (unwatch)="unwatch($event)" />
         } @else {
           <div class="grid">
             @for (task of tasks$ | async; track task.id) {
-              <app-task-card [task]="task"
+              <app-task-card [task]="task" [readonly]="!canEdit(task, meId$ | async)"
+                             [canDelete]="canDelete(task, meId$ | async)" [canUnwatch]="true"
                              (statusChange)="changeStatus(task, $event)"
                              (checklistToggle)="toggleItem(task.id, $event)"
                              (edit)="openForm($event)"
-                             (remove)="remove($event)" />
+                             (remove)="remove($event)"
+                             (unwatch)="unwatch($event)" />
             } @empty {
               @if (queryActive$ | async) {
                 <div class="empty" data-cy="no-match">
@@ -191,6 +196,7 @@ export class TaskBoardComponent implements OnInit {
   readonly loading$ = this.store.select(tasksFeature.selectLoading);
   readonly query$ = this.store.select(tasksFeature.selectQuery);
   readonly queryActive$ = this.store.select(tasksFeature.selectQueryActive);
+  readonly meId$ = this.store.select(tasksFeature.selectMeId);
 
   readonly statuses = TASK_STATUSES;
   readonly labels = STATUS_LABELS;
@@ -230,6 +236,18 @@ export class TaskBoardComponent implements OnInit {
 
   remove(id: number): void {
     this.store.dispatch(TasksActions.delete({ id }));
+  }
+
+  unwatch(id: number): void {
+    this.store.dispatch(TasksActions.unwatch({ id }));
+  }
+
+  canEdit(task: Task, meId: number | null): boolean {
+    return canEditTask(task, meId);
+  }
+
+  canDelete(task: Task, meId: number | null): boolean {
+    return canDeleteTask(task, meId);
   }
 
   openForm(task?: Task): void {

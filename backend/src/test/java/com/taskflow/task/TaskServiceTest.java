@@ -1,11 +1,14 @@
 package com.taskflow.task;
 
+import com.taskflow.common.BadRequestException;
+import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
 import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.ChecklistItemResponse;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
 import com.taskflow.task.TaskDtos.TaskOwnerSummary;
+import com.taskflow.task.TaskDtos.UserSummary;
 import com.taskflow.task.TaskRepository.OwnerStatusCount;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
@@ -18,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -37,11 +41,23 @@ class TaskServiceTest {
     private TaskService service;
 
     private User owner;
+    private User bob;
 
     @BeforeEach
     void setUp() {
-        owner = new User("alice@test.com", "hash", "Alice");
-        owner.setId(1L);
+        owner = user(1L, "Alice");
+        bob = user(2L, "Bob");
+    }
+
+    private static User user(Long id, String name) {
+        User user = new User(name.toLowerCase() + "@test.com", "hash", name);
+        user.setId(id);
+        return user;
+    }
+
+    /** Another instance of the same user, as the authenticated principal is (users are compared by id). */
+    private static User copyOf(User user) {
+        return user(user.getId(), user.getFullName());
     }
 
     @Test
@@ -67,7 +83,7 @@ class TaskServiceTest {
         task.setId(5L);
         task.setTitle("Deploy");
         task.setOwner(owner);
-        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
         when(repository.saveAndFlush(task)).thenReturn(task);
 
         TaskResponse updated = service.updateStatus(owner, 5L, TaskStatus.DONE);
@@ -76,13 +92,113 @@ class TaskServiceTest {
     }
 
     @Test
-    void throwsWhenTaskBelongsToAnotherUser() {
-        when(repository.findByIdAndOwnerId(99L, 1L)).thenReturn(Optional.empty());
+    void throwsWhenTaskDoesNotExist() {
+        when(repository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.delete(owner, 99L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("99");
         verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void strangerCannotChangeOrDeleteATask() {
+        Task task = taskWithChecklist();
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> service.updateStatus(bob, 5L, TaskStatus.DONE)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> service.update(bob, 5L, new TaskRequest("Hijack", null, null, null, null)))
+                .isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> service.toggleChecklistItem(bob, 5L, 10L, true)).isInstanceOf(ForbiddenException.class);
+        assertThatThrownBy(() -> service.delete(bob, 5L)).isInstanceOf(ForbiddenException.class);
+        assertThat(task.getStatus()).isEqualTo(TaskStatus.TODO);
+        verify(repository, never()).saveAndFlush(any());
+        verify(repository, never()).delete(any());
+    }
+
+    @Test
+    void assigneeCanWorkOnTheTaskButNotDeleteIt() {
+        Task task = taskWithChecklist();
+        task.setAssignee(copyOf(bob));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        assertThat(service.updateStatus(bob, 5L, TaskStatus.IN_PROGRESS).status()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(service.toggleChecklistItem(bob, 5L, 10L, true).checklist().get(0).done()).isTrue();
+        assertThatThrownBy(() -> service.delete(bob, 5L)).isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void updateSetsAssigneeAndReplacesWatchers() {
+        User carol = user(3L, "Carol");
+        Task task = taskWithChecklist();
+        task.getWatchers().add(copyOf(owner));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+        when(users.findById(2L)).thenReturn(Optional.of(bob));
+        when(users.findAllById(Set.of(3L, 2L))).thenReturn(List.of(carol, bob));
+
+        TaskResponse updated = service.update(owner, 5L, new TaskRequest("Deploy", null, null, null, null, null, null,
+                2L, List.of(3L, 2L, 3L)));
+
+        assertThat(updated.assignee().fullName()).isEqualTo("Bob");
+        assertThat(updated.owner().id()).isEqualTo(1L);
+        assertThat(updated.watchers()).extracting(UserSummary::fullName).containsExactly("Bob", "Carol");
+    }
+
+    @Test
+    void updateWithoutAssigneeUnassignsButKeepsWatchers() {
+        Task task = taskWithChecklist();
+        task.setAssignee(bob);
+        task.getWatchers().add(bob);
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        TaskResponse updated = service.update(owner, 5L, new TaskRequest("Deploy", null, null, null, null));
+
+        assertThat(updated.assignee()).isNull();
+        assertThat(updated.watchers()).hasSize(1);
+    }
+
+    @Test
+    void rejectsUnknownAssigneeOrWatcher() {
+        when(repository.findById(5L)).thenReturn(Optional.of(taskWithChecklist()));
+        when(users.findById(42L)).thenReturn(Optional.empty());
+        when(users.findAllById(any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.update(owner, 5L,
+                new TaskRequest("Deploy", null, null, null, null, null, null, 42L, null)))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> service.update(owner, 5L,
+                new TaskRequest("Deploy", null, null, null, null, null, null, null, List.of(42L))))
+                .isInstanceOf(BadRequestException.class);
+    }
+
+    @Test
+    void anyoneCanWatchAndUnwatchATaskOnce() {
+        Task task = taskWithChecklist();
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+        when(users.getReferenceById(2L)).thenReturn(bob);
+
+        service.setWatching(copyOf(bob), 5L, true);
+        service.setWatching(copyOf(bob), 5L, true);
+        assertThat(task.getWatchers()).extracting(User::getId).containsExactly(2L);
+
+        service.setWatching(copyOf(bob), 5L, false);
+        assertThat(task.getWatchers()).isEmpty();
+    }
+
+    @Test
+    void findAllReturnsTheBoardFilteredByStatus() {
+        Task todo = taskWithChecklist();
+        Task done = taskWithChecklist();
+        done.setId(6L);
+        done.setStatus(TaskStatus.DONE);
+        when(repository.findOnBoardOf(1L)).thenReturn(List.of(todo, done));
+
+        assertThat(service.findAll(owner, null)).hasSize(2);
+        assertThat(service.findAll(owner, TaskStatus.DONE)).extracting(TaskResponse::id).containsExactly(6L);
     }
 
     @Test
@@ -156,7 +272,7 @@ class TaskServiceTest {
     void updateWithoutLabelsOrChecklistKeepsThem() {
         Task task = taskWithChecklist();
         task.getLabels().add("bug");
-        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
         when(repository.saveAndFlush(task)).thenReturn(task);
 
         TaskResponse updated = service.update(owner, 5L, new TaskRequest("Renamed", null, null, null, null));
@@ -170,7 +286,7 @@ class TaskServiceTest {
     void updateReplacesChecklistKeepingKnownItems() {
         Task task = taskWithChecklist();
         ChecklistItem kept = task.getChecklist().get(1);
-        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
         when(repository.saveAndFlush(task)).thenReturn(task);
 
         service.update(owner, 5L, new TaskRequest("Deploy", null, null, null, null, null,
@@ -188,7 +304,7 @@ class TaskServiceTest {
     @Test
     void toggleChecklistItemMarksItDone() {
         Task task = taskWithChecklist();
-        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(task));
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
         when(repository.saveAndFlush(task)).thenReturn(task);
 
         TaskResponse updated = service.toggleChecklistItem(owner, 5L, 10L, true);
@@ -198,7 +314,7 @@ class TaskServiceTest {
 
     @Test
     void toggleUnknownChecklistItemThrows() {
-        when(repository.findByIdAndOwnerId(5L, 1L)).thenReturn(Optional.of(taskWithChecklist()));
+        when(repository.findById(5L)).thenReturn(Optional.of(taskWithChecklist()));
 
         assertThatThrownBy(() -> service.toggleChecklistItem(owner, 5L, 99L, true))
                 .isInstanceOf(NotFoundException.class);
