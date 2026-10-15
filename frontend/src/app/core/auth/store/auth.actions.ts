@@ -9,6 +9,8 @@ export const AuthActions = createActionGroup({
     'Auth Success': props<{ response: AuthResponse }>(),
     'Auth Failure': props<{ error: string }>(),
     'Session Restored': props<{ user: User }>(),
+    /** The current user changed on the server (email verified, preferences). */
+    'User Updated': props<{ user: User }>(),
     Logout: emptyProps(),
   },
 });

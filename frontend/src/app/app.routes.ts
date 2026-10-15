@@ -14,6 +14,20 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/register.component').then((m) => m.RegisterComponent),
   },
   {
+    path: 'forgot-password',
+    canActivate: [guestGuard],
+    loadComponent: () => import('./features/auth/forgot-password.component').then((m) => m.ForgotPasswordComponent),
+  },
+  // reached from emailed links, whether signed in or not
+  {
+    path: 'reset-password',
+    loadComponent: () => import('./features/auth/reset-password.component').then((m) => m.ResetPasswordComponent),
+  },
+  {
+    path: 'verify-email',
+    loadComponent: () => import('./features/auth/verify-email.component').then((m) => m.VerifyEmailComponent),
+  },
+  {
     path: 'tasks',
     canActivate: [authGuard],
     loadComponent: () => import('./features/tasks/task-board.component').then((m) => m.TaskBoardComponent),

@@ -42,14 +42,18 @@ import { Meeting, PARTICIPANT_STATUS_ICONS, PARTICIPANT_STATUS_LABELS, Participa
           </div>
         }
       </div>
-      @if (meeting.organizedByMe) {
-        <div class="actions">
+      <div class="actions">
+        @if (meeting.organizedByMe) {
           <button mat-icon-button (click)="edit.emit(meeting)" aria-label="Edit meeting"><mat-icon>edit</mat-icon></button>
           <button mat-icon-button class="delete" (click)="remove.emit(meeting.id)" aria-label="Delete meeting">
             <mat-icon>delete_outline</mat-icon>
           </button>
-        </div>
-      }
+        }
+        <button mat-icon-button (click)="exportIcs.emit(meeting)" aria-label="Add to my calendar (.ics)"
+                matTooltip="Add to my calendar (.ics)" data-cy="meeting-ics">
+          <mat-icon>event_upcoming</mat-icon>
+        </button>
+      </div>
     </article>
   `,
   styles: [`
@@ -88,6 +92,7 @@ export class MeetingItemComponent {
   @Output() edit = new EventEmitter<Meeting>();
   @Output() remove = new EventEmitter<number>();
   @Output() respond = new EventEmitter<Exclude<ParticipantStatus, 'PENDING'>>();
+  @Output() exportIcs = new EventEmitter<Meeting>();
 
   readonly labels = PARTICIPANT_STATUS_LABELS;
   readonly icons = PARTICIPANT_STATUS_ICONS;

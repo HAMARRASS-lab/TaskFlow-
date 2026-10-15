@@ -16,4 +16,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByEmailIn(Collection<String> emails);
 
     List<User> findAllByOrderByFullNameAsc();
+
+    Optional<User> findByCalendarFeedToken(String calendarFeedToken);
+
+    /** Recipients of the daily digest. */
+    List<User> findByEmailVerifiedTrueAndDigestEnabledTrue();
 }

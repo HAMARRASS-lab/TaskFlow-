@@ -6,12 +6,16 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog } from '@angular/material/dialog';
 import { Store } from '@ngrx/store';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { filter } from 'rxjs';
+import { errorMessage } from '../../core/api';
 import { Task } from '../tasks/task.models';
 import { TasksActions } from '../tasks/store/tasks.actions';
 import { tasksFeature } from '../tasks/store/tasks.reducer';
 import { MeetingDialogResult, MeetingFormDialogComponent } from './components/meeting-form-dialog.component';
 import { MeetingItemComponent } from './components/meeting-item.component';
+import { CalendarFeedDialogComponent } from './components/calendar-feed-dialog.component';
+import { MeetingService } from './meeting.service';
 import { addDays, addMonths, isSameDay, monthGrid, parseLocal, startOfMonth, toDayKey, toLocalDateTime } from './calendar.utils';
 import { Meeting, MeetingDialogData, ParticipantStatus } from './meeting.models';
 import { MeetingsActions } from './store/meetings.actions';
@@ -30,9 +34,14 @@ const MAX_EVENTS_PER_CELL = 3;
           <h1>Calendar</h1>
           <p>Plan and organize your meetings</p>
         </div>
-        <button mat-flat-button color="primary" class="new" (click)="openForm(undefined, selected())" data-cy="new-meeting">
-          <mat-icon>add</mat-icon> New meeting
-        </button>
+        <div class="head-actions">
+          <button mat-stroked-button class="sync" (click)="openFeed()" data-cy="calendar-sync">
+            <mat-icon>sync</mat-icon> Sync
+          </button>
+          <button mat-flat-button color="primary" class="new" (click)="openForm(undefined, selected())" data-cy="new-meeting">
+            <mat-icon>add</mat-icon> New meeting
+          </button>
+        </div>
       </header>
 
       <div class="layout">
@@ -93,7 +102,8 @@ const MAX_EVENTS_PER_CELL = 3;
             <section class="invitations" data-cy="invitations">
               <h5><mat-icon>mail</mat-icon> Invitations ({{ invitations().length }})</h5>
               @for (m of invitations(); track m.id) {
-                <app-meeting-item [meeting]="m" [showDate]="true" (respond)="respond(m.id, $event)" />
+                <app-meeting-item [meeting]="m" [showDate]="true" (respond)="respond(m.id, $event)"
+                                  (exportIcs)="exportIcs($event)" />
               }
             </section>
           }
@@ -109,7 +119,7 @@ const MAX_EVENTS_PER_CELL = 3;
 
           @for (m of selectedMeetings(); track m.id) {
             <app-meeting-item [meeting]="m" (edit)="openForm($event)" (remove)="remove($event)"
-                              (respond)="respond(m.id, $event)" />
+                              (respond)="respond(m.id, $event)" (exportIcs)="exportIcs($event)" />
           } @empty {
             <div class="empty">
               <mat-icon>event_available</mat-icon>
@@ -132,7 +142,8 @@ const MAX_EVENTS_PER_CELL = 3;
     .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
     .head h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; }
     .head p { margin: 4px 0 0; color: var(--tf-muted); font-size: 14px; }
-    .new { height: 42px; padding: 0 18px; }
+    .new, .sync { height: 42px; padding: 0 18px; }
+    .head-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 
     .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
     .panel {
@@ -211,6 +222,8 @@ const MAX_EVENTS_PER_CELL = 3;
 export class CalendarComponent implements OnInit {
   private readonly store = inject(Store);
   private readonly dialog = inject(MatDialog);
+  private readonly meetingService = inject(MeetingService);
+  private readonly snackBar = inject(MatSnackBar);
 
   readonly weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   readonly maxEvents = MAX_EVENTS_PER_CELL;
@@ -298,6 +311,25 @@ export class CalendarComponent implements OnInit {
 
   respond(id: number, status: Exclude<ParticipantStatus, 'PENDING'>): void {
     this.store.dispatch(MeetingsActions.respond({ id, status }));
+  }
+
+  openFeed(): void {
+    this.dialog.open(CalendarFeedDialogComponent, { width: '560px', maxWidth: '95vw' });
+  }
+
+  /** Downloads the meeting as an .ics file, to import into Google Calendar, Outlook, etc. */
+  exportIcs(meeting: Meeting): void {
+    this.meetingService.downloadIcs(meeting.id).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${meeting.title.replace(/[^\p{L}\p{N} _-]+/gu, '').trim() || 'meeting'}.ics`;
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: (e) => this.snackBar.open(errorMessage(e), 'Close', { duration: 5000 }),
+    });
   }
 
   remove(id: number): void {

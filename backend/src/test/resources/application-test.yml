@@ -8,3 +8,5 @@ spring:
 app:
   admin:
     emails: admin@test.com
+  digest:
+    cron: "-"

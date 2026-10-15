@@ -17,7 +17,7 @@ export const authFeature = createFeature({
     on(AuthActions.login, AuthActions.register, (state) => ({ ...state, loading: true, error: null })),
     on(AuthActions.authSuccess, (state, { response }) => ({ user: response.user, loading: false, error: null })),
     on(AuthActions.authFailure, (state, { error }) => ({ ...state, loading: false, error })),
-    on(AuthActions.sessionRestored, (state, { user }) => ({ ...state, user })),
+    on(AuthActions.sessionRestored, AuthActions.userUpdated, (state, { user }) => ({ ...state, user })),
     on(AuthActions.logout, () => initialAuthState),
   ),
   extraSelectors: ({ selectUser }) => ({

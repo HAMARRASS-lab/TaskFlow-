@@ -52,3 +52,7 @@ export interface MeetingDialogData {
   meeting?: Meeting;
   date?: Date;
 }
+
+export interface CalendarFeed {
+  url: string | null;
+}

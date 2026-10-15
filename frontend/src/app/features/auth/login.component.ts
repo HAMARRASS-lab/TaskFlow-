@@ -34,6 +34,7 @@ import { authFeature } from '../../core/auth/store/auth.reducer';
             <mat-label>Password</mat-label>
             <input matInput type="password" formControlName="password" autocomplete="current-password" data-cy="password" />
           </mat-form-field>
+          <p class="forgot"><a routerLink="/forgot-password" data-cy="forgot-password">Forgot password?</a></p>
           @if (error$ | async; as error) { <p class="error-text" data-cy="error">{{ error }}</p> }
           <button mat-flat-button color="primary" class="full-width submit" type="submit"
                   [disabled]="form.invalid || (loading$ | async)" data-cy="submit">Sign in</button>
@@ -42,6 +43,7 @@ import { authFeature } from '../../core/auth/store/auth.reducer';
       </div>
     </div>
   `,
+  styles: [`.forgot { margin: -8px 0 12px; text-align: right; font-size: 13px; }`],
 })
 export class LoginComponent {
   private readonly store = inject(Store);

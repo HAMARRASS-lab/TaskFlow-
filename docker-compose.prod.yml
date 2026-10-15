@@ -30,6 +30,17 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-h.hamarrass1@gmail.com}
+      FRONTEND_URL: https://${DOMAIN}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
+      # Emails are only logged until an SMTP provider is configured in .env (MAIL_ENABLED=true + MAIL_*)
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-true}
+      MAIL_FROM: ${MAIL_FROM:-TaskFlow <no-reply@${DOMAIN}>}
       JAVA_OPTS: -XX:MaxRAMPercentage=50
 
   frontend:
