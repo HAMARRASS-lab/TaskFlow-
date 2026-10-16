@@ -24,7 +24,7 @@ import { AdminService, AdminUser } from '../admin/admin.service';
     <div class="page">
       <header class="head">
         <h1>Team</h1>
-        <p>Everyone who has created tasks. Select a person to see their tasks.</p>
+        <p>Everyone with tasks, created or assigned. Select a person to see their tasks.</p>
       </header>
 
       @if (error()) { <p class="error" data-cy="error">{{ error() }}</p> }
@@ -42,7 +42,7 @@ import { AdminService, AdminUser } from '../admin/admin.service';
               <span class="count" [attr.aria-label]="owner.total + ' tasks'" data-cy="owner-count">{{ owner.total }}</span>
             </a>
           } @empty {
-            @if (!loadingOwners()) { <p class="muted">No one has created a task yet.</p> }
+            @if (!loadingOwners()) { <p class="muted">No one has any tasks yet.</p> }
           }
         </aside>
 
@@ -61,7 +61,8 @@ import { AdminService, AdminUser } from '../admin/admin.service';
                 }
               </mat-button-toggle-group>
             </div>
-            <app-task-query-bar class="query" [query]="query()" [labels]="taskLabels()" (queryChange)="patchQuery($event)" (reset)="resetQuery()" />
+            <app-task-query-bar class="query" [query]="query()" [labels]="taskLabels()" [involvementFor]="owner.fullName"
+                                (queryChange)="patchQuery($event)" (reset)="resetQuery()" />
             @if (loadingTasks()) { <mat-progress-bar mode="indeterminate" class="loading" /> }
             <div class="grid">
               @for (task of visibleTasks(); track task.id) {
@@ -146,7 +147,7 @@ export class TeamComponent implements OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   readonly me = inject(Store).selectSignal(authFeature.selectUser);
-  /** All users, loaded on first use by admins to reassign tasks. */
+  /** All users, loaded on first use by admins to assign or transfer tasks. */
   private allUsers: AdminUser[] | null = null;
 
   readonly statuses = TASK_STATUSES;
@@ -166,7 +167,8 @@ export class TeamComponent implements OnInit {
   readonly taskLabels = computed(() => collectLabels(this.tasks()));
   readonly visibleTasks = computed(() => {
     const f = this.filter();
-    return applyTaskQuery(f === 'ALL' ? this.tasks() : this.tasks().filter((t) => t.status === f), this.query());
+    const tasks = f === 'ALL' ? this.tasks() : this.tasks().filter((t) => t.status === f);
+    return applyTaskQuery(tasks, this.query(), new Date(), this.selectedId());
   });
 
   /** Bound from the `team/:userId` route parameter. */
@@ -214,7 +216,7 @@ export class TeamComponent implements OnInit {
     if (this.me()?.role !== 'ADMIN') {
       this.showDetails({ task, ownerName: owner.fullName });
     } else if (this.allUsers) {
-      this.showDetails({ task, ownerName: owner.fullName, ownerId: owner.id, assignees: this.allUsers });
+      this.showDetails({ task, ownerName: owner.fullName, ownerId: owner.id, users: this.allUsers });
     } else {
       this.admin.getUsers().subscribe({
         next: (users) => {
@@ -227,21 +229,32 @@ export class TeamComponent implements OnInit {
   }
 
   private showDetails(data: TaskDetailData): void {
-    this.dialog.open<TaskDetailDialogComponent, TaskDetailData, number>(TaskDetailDialogComponent, {
+    const ref = this.dialog.open<TaskDetailDialogComponent, TaskDetailData, number>(TaskDetailDialogComponent, {
       data,
       width: '520px',
       maxWidth: '95vw',
-    }).afterClosed().subscribe((userId) => {
-      if (userId) this.reassign(data.task, userId);
+    });
+    // assigned or (un)watched in the dialog: refresh the card behind it, and the counts
+    ref.componentInstance.taskChange.subscribe((task) => {
+      const member = this.selectedId();
+      const stillTheirs = task.owner.id === member || task.assignee?.id === member;
+      this.tasks.update((tasks) =>
+        stillTheirs ? tasks.map((t) => (t.id === task.id ? task : t)) : tasks.filter((t) => t.id !== task.id),
+      );
+      this.loadOwners();
+    });
+    ref.afterClosed().subscribe((userId) => {
+      if (userId) this.transfer(data.task, userId);
     });
   }
 
-  private reassign(task: Task, userId: number): void {
-    this.admin.reassignTask(task.id, userId).subscribe({
+  private transfer(task: Task, userId: number): void {
+    this.admin.transferTask(task.id, userId).subscribe({
       next: () => {
         const name = this.allUsers?.find((u) => u.id === userId)?.fullName ?? 'user';
         this.snackBar.open(`"${task.title}" transferred to ${name}`, 'Close', { duration: 3000 });
-        this.tasks.update((tasks) => tasks.filter((t) => t.id !== task.id));
+        const member = this.selectedId();
+        if (member !== null) this.loadTasks(member); // it may still be theirs, as the assignee
         this.loadOwners();
       },
       error: (e) => this.snackBar.open(errorMessage(e), 'Close', { duration: 5000 }),

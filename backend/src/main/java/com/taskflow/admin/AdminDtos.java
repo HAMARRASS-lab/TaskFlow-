@@ -30,7 +30,11 @@ public final class AdminDtos {
             @NotNull Role role) {
     }
 
-    public record AssignRequest(@NotNull Long userId) {
+    public record TransferRequest(@NotNull Long userId) {
+    }
+
+    /** {@code userId} null unassigns the task. */
+    public record AssigneeRequest(Long userId) {
     }
 
     public record AdminUserResponse(Long id, String email, String fullName, Role role, LocalDateTime createdAt) {

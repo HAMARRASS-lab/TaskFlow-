@@ -1,5 +1,6 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, EventEmitter, Output, computed, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { Observable } from 'rxjs';
 import { Store } from '@ngrx/store';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -13,22 +14,27 @@ import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
 import { TaskCommentsComponent } from '../tasks/comments/task-comments.component';
 import { LabelChipComponent } from '../tasks/components/label-chip.component';
+import { AdminService } from '../admin/admin.service';
+import { UserAvatarComponent } from '../tasks/components/user-avatar.component';
 import { TaskService } from '../tasks/task.service';
-import { STATUS_LABELS, Task, checklistProgress, isOverdue, isWatching } from '../tasks/task.models';
+import { STATUS_LABELS, Task, UserSummary, checklistProgress, isOverdue, isWatching } from '../tasks/task.models';
 
 export interface TaskDetailData {
   task: Task;
   ownerName: string;
-  /** Admins only: users the task's ownership can be transferred to. The dialog then closes with the chosen user id. */
-  assignees?: { id: number; fullName: string }[];
+  /**
+   * Admins only: every user. The admin can assign the task to any of them (applied at once, see `taskChange`) or
+   * transfer its ownership (the dialog then closes with the chosen user id).
+   */
+  users?: UserSummary[];
   ownerId?: number;
 }
 
-/** Read-only view of a teammate's task, opened from the Team page: anyone can watch it, admins can transfer it. */
+/** View of a teammate's task, opened from the Team page: anyone can watch it, admins can assign or transfer it. */
 @Component({
   selector: 'app-task-detail-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent, LabelChipComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent, LabelChipComponent, UserAvatarComponent],
   template: `
     <h2 mat-dialog-title data-cy="detail-title">{{ task().title }}</h2>
     <mat-dialog-content>
@@ -67,16 +73,36 @@ export interface TaskDetailData {
         <dt>Last updated</dt><dd>{{ task().updatedAt | date: 'MMM d, y, HH:mm' }}</dd>
       </dl>
 
+      @if (data.users; as users) {
+        <section class="admin" data-cy="detail-admin">
+          <h3><mat-icon>admin_panel_settings</mat-icon> Admin</h3>
+          <mat-form-field appearance="outline" class="assign" subscriptSizing="dynamic">
+            <mat-label>Assign to</mat-label>
+            <mat-select [value]="task().assignee?.id ?? null" (selectionChange)="assign($event.value)"
+                        [disabled]="busy()" data-cy="detail-assign">
+              <mat-select-trigger>{{ task().assignee?.fullName ?? 'Unassigned' }}</mat-select-trigger>
+              <mat-option [value]="null"><span class="muted">Unassigned</span></mat-option>
+              @for (u of users; track u.id) {
+                <mat-option [value]="u.id">
+                  <span class="person">
+                    <app-user-avatar [user]="u" [size]="24" [tooltip]="null" />
+                    <span class="who"><span>{{ u.fullName }}</span><span class="email">{{ u.email }}</span></span>
+                  </span>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline" class="assign" subscriptSizing="dynamic">
+            <mat-label>Transfer ownership to</mat-label>
+            <mat-select [(ngModel)]="transferTo" data-cy="detail-transfer-to">
+              @for (u of users; track u.id) { <mat-option [value]="u.id">{{ u.fullName }} · {{ u.email }}</mat-option> }
+            </mat-select>
+          </mat-form-field>
+        </section>
+      }
+
       <app-task-comments [taskId]="task().id" />
 
-      @if (data.assignees; as assignees) {
-        <mat-form-field appearance="outline" class="assign" subscriptSizing="dynamic">
-          <mat-label>Transfer ownership to</mat-label>
-          <mat-select [(ngModel)]="assigneeId" data-cy="detail-assignee">
-            @for (u of assignees; track u.id) { <mat-option [value]="u.id">{{ u.fullName }}</mat-option> }
-          </mat-select>
-        </mat-form-field>
-      }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button (click)="toggleWatch()" [disabled]="busy()" data-cy="detail-watch">
@@ -85,9 +111,9 @@ export interface TaskDetailData {
       </button>
       <span class="spacer"></span>
       <button mat-button mat-dialog-close data-cy="detail-close">Close</button>
-      @if (data.assignees) {
-        <button mat-flat-button color="primary" [disabled]="!assigneeId || assigneeId === data.ownerId"
-                (click)="reassign()" data-cy="detail-reassign">Transfer</button>
+      @if (data.users) {
+        <button mat-flat-button color="primary" [disabled]="!transferTo || transferTo === data.ownerId"
+                (click)="transfer()" data-cy="detail-transfer">Transfer</button>
       }
     </mat-dialog-actions>
   `,
@@ -120,14 +146,22 @@ export interface TaskDetailData {
     dt { color: var(--tf-muted); }
     dd { margin: 0; color: var(--tf-text); }
     dd.overdue { color: var(--tf-high); font-weight: 500; }
-    .assign { width: 100%; margin-top: 20px; }
+    .admin { margin: 20px 0 8px; padding-top: 16px; border-top: 1px solid var(--tf-border); }
+    .admin h3 { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+    .admin h3 mat-icon { font-size: 16px; width: 16px; height: 16px; }
+    .assign { width: 100%; margin-bottom: 12px; }
+    .person { display: inline-flex; align-items: center; gap: 10px; }
+    .who { display: flex; flex-direction: column; line-height: 1.25; }
+    .email, .muted { font-size: 12px; color: var(--tf-muted); }
     .spacer { flex: 1; }
   `],
 })
 export class TaskDetailDialogComponent {
   readonly data = inject<TaskDetailData>(MAT_DIALOG_DATA);
-  /** Updated when the user starts or stops watching it. */
+  /** Updated when the user (un)watches it or an admin assigns it. */
   readonly task = signal<Task>(this.data.task);
+  /** Emits the task after each change made here, so the page behind can refresh its card. */
+  @Output() readonly taskChange = new EventEmitter<Task>();
   readonly labels = STATUS_LABELS;
   readonly overdue = isOverdue(this.data.task);
   readonly progress = checklistProgress(this.data.task);
@@ -136,25 +170,40 @@ export class TaskDetailDialogComponent {
   readonly watcherNames = computed(() => this.task().watchers.map((w) => w.fullName).join(', '));
   readonly busy = signal(false);
   private readonly tasks = inject(TaskService);
+  private readonly admin = inject(AdminService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly dialogRef = inject(MatDialogRef<TaskDetailDialogComponent, number>, { optional: true });
-  assigneeId = this.data.ownerId;
+  transferTo = this.data.ownerId;
 
   toggleWatch(): void {
+    this.apply(this.tasks.setWatching(this.task().id, !this.watching()));
+  }
+
+  /** Admin: assigns the task to any user (`null` unassigns it), right away. */
+  assign(userId: number | null): void {
+    this.apply(this.admin.assignTask(this.task().id, userId), (task) =>
+      this.snackBar.open(task.assignee ? `Assigned to ${task.assignee.fullName}` : 'Unassigned', 'Close', { duration: 3000 }),
+    );
+  }
+
+  transfer(): void {
+    if (this.transferTo && this.transferTo !== this.data.ownerId) this.dialogRef?.close(this.transferTo);
+  }
+
+  private apply(request: Observable<Task>, done?: (task: Task) => void): void {
     this.busy.set(true);
-    this.tasks.setWatching(this.task().id, !this.watching()).subscribe({
+    request.subscribe({
       next: (task) => {
         this.task.set(task);
         this.busy.set(false);
+        this.taskChange.emit(task);
+        done?.(task);
       },
       error: (e) => {
         this.busy.set(false);
+        this.task.update((t) => ({ ...t })); // re-renders the assignee select with the unchanged value
         this.snackBar.open(errorMessage(e), 'Close', { duration: 5000 });
       },
     });
-  }
-
-  reassign(): void {
-    if (this.assigneeId && this.assigneeId !== this.data.ownerId) this.dialogRef?.close(this.assigneeId);
   }
 }

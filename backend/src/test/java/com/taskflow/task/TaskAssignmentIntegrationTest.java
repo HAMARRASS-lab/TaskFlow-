@@ -79,6 +79,16 @@ class TaskAssignmentIntegrationTest {
         mvc.perform(get("/api/tasks").header("Authorization", dave.bearer()))
                 .andExpect(jsonPath("$[*].id", not(hasItem((int) id))));
 
+        // the Team page lists it under the assignee too (not under the watcher), and counts it for both
+        mvc.perform(get("/api/users/{id}/tasks", bob.id()).header("Authorization", dave.bearer()))
+                .andExpect(jsonPath("$[*].id", hasItem((int) id)));
+        mvc.perform(get("/api/users/{id}/tasks", carol.id()).header("Authorization", dave.bearer()))
+                .andExpect(jsonPath("$[*].id", not(hasItem((int) id))));
+        mvc.perform(get("/api/users/task-owners").header("Authorization", dave.bearer()))
+                .andExpect(jsonPath("$[?(@.id == %d)].total".formatted(bob.id()), hasItem(1)))
+                .andExpect(jsonPath("$[?(@.id == %d)].total".formatted(alice.id()), hasItem(1)))
+                .andExpect(jsonPath("$[?(@.id == %d)]".formatted(carol.id())).isEmpty());
+
         // the assignee works on it, the watcher can't, only the owner deletes
         mvc.perform(patch("/api/tasks/{id}/status", id).header("Authorization", bob.bearer())
                         .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"IN_PROGRESS\"}"))

@@ -8,6 +8,8 @@ import com.taskflow.meeting.MeetingDtos.MeetingRequest;
 import com.taskflow.meeting.MeetingDtos.MeetingResponse;
 import com.taskflow.meeting.MeetingDtos.OrganizerResponse;
 import com.taskflow.meeting.MeetingDtos.ParticipantResponse;
+import com.taskflow.notification.NotificationService;
+import com.taskflow.notification.NotificationType;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import org.springframework.stereotype.Service;
@@ -30,10 +32,12 @@ public class MeetingService {
 
     private final MeetingRepository meetings;
     private final UserRepository users;
+    private final NotificationService notifications;
 
-    public MeetingService(MeetingRepository meetings, UserRepository users) {
+    public MeetingService(MeetingRepository meetings, UserRepository users, NotificationService notifications) {
         this.meetings = meetings;
         this.users = users;
+        this.notifications = notifications;
     }
 
     @Transactional(readOnly = true)
@@ -66,14 +70,31 @@ public class MeetingService {
         Meeting meeting = new Meeting();
         meeting.setOwner(owner);
         apply(meeting, request);
-        return toResponse(owner, meetings.save(meeting));
+        Meeting saved = meetings.save(meeting);
+        notifications.meetingChanged(owner, saved, participantsOf(saved), NotificationType.MEETING_INVITED);
+        return toResponse(owner, saved);
     }
 
     public MeetingResponse update(User owner, Long id, MeetingRequest request) {
         Meeting meeting = loadOwned(owner, id);
         validate(owner, request, id);
+        List<String> before = participantsOf(meeting);
+        LocalDateTime startAt = meeting.getStartAt();
+        LocalDateTime endAt = meeting.getEndAt();
         apply(meeting, request);
+        // newcomers are invited; if it moved, the others must answer again
+        List<String> after = participantsOf(meeting);
+        notifications.meetingChanged(owner, meeting, after.stream().filter(p -> !before.contains(p)).toList(),
+                NotificationType.MEETING_INVITED);
+        if (!meeting.getStartAt().equals(startAt) || !meeting.getEndAt().equals(endAt)) {
+            notifications.meetingChanged(owner, meeting, after.stream().filter(before::contains).toList(),
+                    NotificationType.MEETING_RESCHEDULED);
+        }
         return toResponse(owner, meetings.saveAndFlush(meeting));
+    }
+
+    private static List<String> participantsOf(Meeting meeting) {
+        return meeting.getParticipants().stream().map(MeetingParticipant::getParticipant).toList();
     }
 
     public MeetingResponse respond(User user, Long id, ParticipantStatus status) {

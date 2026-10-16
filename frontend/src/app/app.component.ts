@@ -15,12 +15,13 @@ import { Store } from '@ngrx/store';
 import { AuthActions } from './core/auth/store/auth.actions';
 import { authFeature } from './core/auth/store/auth.reducer';
 import { meetingsFeature } from './features/meetings/store/meetings.reducer';
+import { NotificationBellComponent } from './features/notifications/notification-bell.component';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [AsyncPipe, RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule,
-    MatMenuModule],
+    MatMenuModule, NotificationBellComponent],
   template: `
     <mat-toolbar class="topbar">
       <span class="logo"><mat-icon>task_alt</mat-icon></span>
@@ -48,6 +49,7 @@ import { meetingsFeature } from './features/meetings/store/meetings.reducer';
       }
       <span class="spacer"></span>
       @if (user$ | async; as user) {
+        <app-notification-bell />
         <span class="avatar" aria-hidden="true">{{ initials(user.fullName) }}</span>
         <span class="user" data-cy="current-user">{{ user.fullName }}</span>
         <button mat-icon-button [matMenuTriggerFor]="account" aria-label="Account settings" data-cy="account-menu">

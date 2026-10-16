@@ -4,6 +4,7 @@ import com.taskflow.comment.CommentDtos.CommentRequest;
 import com.taskflow.comment.CommentDtos.CommentResponse;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.Task;
 import com.taskflow.task.TaskRepository;
 import com.taskflow.user.Role;
@@ -31,6 +32,9 @@ class TaskCommentServiceTest {
 
     @Mock
     private TaskRepository tasks;
+
+    @Mock
+    private NotificationService notifications;
 
     @InjectMocks
     private TaskCommentService service;
@@ -67,6 +71,7 @@ class TaskCommentServiceTest {
         assertThat(created.author().fullName()).isEqualTo("Adam Author");
         assertThat(created.canDelete()).isTrue();
         verify(comments).save(argThat(c -> c.getTask() == task && c.getAuthor() == author));
+        verify(notifications).taskCommented(author, task);
     }
 
     @Test
@@ -76,6 +81,7 @@ class TaskCommentServiceTest {
         assertThatThrownBy(() -> service.create(author, 99L, new CommentRequest("Hi")))
                 .isInstanceOf(NotFoundException.class);
         verify(comments, never()).save(any());
+        verifyNoInteractions(notifications);
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.taskflow.task;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.ChecklistItemResponse;
 import com.taskflow.task.TaskDtos.TaskRequest;
@@ -36,6 +37,9 @@ class TaskServiceTest {
 
     @Mock
     private UserRepository users;
+
+    @Mock
+    private NotificationService notifications;
 
     @InjectMocks
     private TaskService service;
@@ -217,6 +221,20 @@ class TaskServiceTest {
     }
 
     @Test
+    void findOwnersAlsoCountsTasksAssignedToSomeone() {
+        when(repository.countByOwnerAndStatus()).thenReturn(List.of(row(1L, "Alice", TaskStatus.TODO, 2)));
+        when(repository.countByAssigneeAndStatus()).thenReturn(List.of(
+                row(1L, "Alice", TaskStatus.TODO, 1),
+                row(2L, "zoe", TaskStatus.IN_PROGRESS, 3)));
+
+        List<TaskOwnerSummary> owners = service.findOwners();
+
+        assertThat(owners).extracting(TaskOwnerSummary::fullName).containsExactly("Alice", "zoe");
+        assertThat(owners.get(0).todo()).isEqualTo(3);
+        assertThat(owners.get(1)).isEqualTo(new TaskOwnerSummary(2L, "zoe", "zoe@test.com", 0, 3, 0));
+    }
+
+    @Test
     void findByOwnerThrowsForUnknownUser() {
         when(users.findById(99L)).thenReturn(Optional.empty());
 
@@ -224,7 +242,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void reassignMovesTaskToAnotherUser() {
+    void transferOwnershipMovesTaskToAnotherUser() {
         User bob = new User("bob@test.com", "hash", "Bob");
         bob.setId(2L);
         Task task = new Task();
@@ -235,9 +253,34 @@ class TaskServiceTest {
         when(users.findById(2L)).thenReturn(Optional.of(bob));
         when(repository.saveAndFlush(task)).thenReturn(task);
 
-        service.reassign(7L, 2L);
+        service.transferOwnership(7L, 2L);
 
         assertThat(task.getOwner()).isSameAs(bob);
+    }
+
+    @Test
+    void adminAssignsAnyTaskToAnyUserAndUnassignsIt() {
+        Task task = taskWithChecklist();
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+        when(users.findById(2L)).thenReturn(Optional.of(bob));
+
+        User admin = user(9L, "Admin");
+
+        assertThat(service.assign(admin, 5L, 2L).assignee().fullName()).isEqualTo("Bob");
+        verify(notifications).taskAssigned(admin, task, null);
+        assertThat(task.getOwner()).isSameAs(owner);
+        assertThat(service.assign(admin, 5L, null).assignee()).isNull();
+        verify(notifications).taskAssigned(admin, task, 2L);
+    }
+
+    @Test
+    void adminCannotAssignToAnUnknownUser() {
+        when(repository.findById(5L)).thenReturn(Optional.of(taskWithChecklist()));
+        when(users.findById(42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.assign(owner, 5L, 42L)).isInstanceOf(BadRequestException.class);
+        verify(repository, never()).saveAndFlush(any());
     }
 
     @Test
@@ -245,9 +288,12 @@ class TaskServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(owner));
         when(repository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.createFor(1L, new TaskRequest("Onboard", null, null, null, null));
+        User admin = user(9L, "Admin");
+
+        service.createFor(admin, 1L, new TaskRequest("Onboard", null, null, null, null));
 
         verify(repository).save(argThat(t -> t.getOwner() == owner && t.getTitle().equals("Onboard")));
+        verify(notifications).taskAssigned(eq(admin), argThat(t -> t.getOwner() == owner), isNull());
     }
 
     @Test

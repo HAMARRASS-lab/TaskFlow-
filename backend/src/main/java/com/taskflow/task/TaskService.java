@@ -3,6 +3,7 @@ package com.taskflow.task;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.TaskOwnerSummary;
 import com.taskflow.task.TaskDtos.TaskRequest;
@@ -35,10 +36,12 @@ public class TaskService {
 
     private final TaskRepository tasks;
     private final UserRepository users;
+    private final NotificationService notifications;
 
-    public TaskService(TaskRepository tasks, UserRepository users) {
+    public TaskService(TaskRepository tasks, UserRepository users, NotificationService notifications) {
         this.tasks = tasks;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /** The user's board: tasks they created, are assigned to or watch. */
@@ -55,14 +58,19 @@ public class TaskService {
         return TaskResponse.from(loadTask(id));
     }
 
-    /** Every user who has created at least one task, with per-status counts, sorted by name. */
+    /**
+     * Every user who has created or is assigned at least one task, with per-status counts of those tasks, sorted by
+     * name.
+     */
     @Transactional(readOnly = true)
     public List<TaskOwnerSummary> findOwners() {
         Map<Long, long[]> counts = new LinkedHashMap<>();
         Map<Long, OwnerStatusCount> owners = new LinkedHashMap<>();
-        for (OwnerStatusCount row : tasks.countByOwnerAndStatus()) {
+        List<OwnerStatusCount> rows = new ArrayList<>(tasks.countByOwnerAndStatus());
+        rows.addAll(tasks.countByAssigneeAndStatus());
+        for (OwnerStatusCount row : rows) {
             owners.putIfAbsent(row.getOwnerId(), row);
-            counts.computeIfAbsent(row.getOwnerId(), id -> new long[TaskStatus.values().length])[row.getStatus().ordinal()] =
+            counts.computeIfAbsent(row.getOwnerId(), id -> new long[TaskStatus.values().length])[row.getStatus().ordinal()] +=
                     row.getCount();
         }
         return owners.values().stream()
@@ -75,38 +83,55 @@ public class TaskService {
                 .toList();
     }
 
-    /** Read-only view of the tasks another user created. */
+    /** Read-only view of another user's tasks: those they created or are assigned to. */
     @Transactional(readOnly = true)
     public List<TaskResponse> findByOwner(Long ownerId, TaskStatus status) {
-        Long id = loadUser(ownerId).getId();
-        List<Task> result = status == null
-                ? tasks.findByOwnerIdOrderByCreatedAtDesc(id)
-                : tasks.findByOwnerIdAndStatusOrderByCreatedAtDesc(id, status);
-        return result.stream().map(TaskResponse::from).toList();
+        return tasks.findForMember(loadUser(ownerId).getId()).stream()
+                .filter(t -> status == null || t.getStatus() == status)
+                .map(TaskResponse::from)
+                .toList();
     }
 
     public TaskResponse create(User owner, TaskRequest request) {
+        return create(owner, owner, request);
+    }
+
+    /** Admin: creates a task owned by another user. */
+    public TaskResponse createFor(User admin, Long userId, TaskRequest request) {
+        return create(admin, loadUser(userId), request);
+    }
+
+    private TaskResponse create(User actor, User owner, TaskRequest request) {
         Task task = new Task();
         task.setOwner(owner);
         apply(task, request);
-        return TaskResponse.from(tasks.save(task));
+        Task saved = tasks.save(task);
+        notifications.taskAssigned(actor, saved, null);
+        return TaskResponse.from(saved);
     }
 
-    /** Admin: creates a task owned by (assigned to) another user. */
-    public TaskResponse createFor(Long userId, TaskRequest request) {
-        return create(loadUser(userId), request);
-    }
-
-    /** Admin: moves a task to another user. */
-    public TaskResponse reassign(Long id, Long userId) {
-        Task task = tasks.findById(id).orElseThrow(() -> new NotFoundException("Task " + id + " not found"));
+    /** Admin: gives the task (its ownership) to another user. */
+    public TaskResponse transferOwnership(Long id, Long userId) {
+        Task task = loadTask(id);
         task.setOwner(loadUser(userId));
+        return TaskResponse.from(tasks.saveAndFlush(task));
+    }
+
+    /** Admin: assigns any task to any user, or unassigns it ({@code userId} null). */
+    public TaskResponse assign(User admin, Long id, Long userId) {
+        Task task = loadTask(id);
+        Long previousAssigneeId = assigneeId(task);
+        task.setAssignee(userId == null ? null : loadMember(userId));
+        task.touch();
+        notifications.taskAssigned(admin, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
     public TaskResponse update(User user, Long id, TaskRequest request) {
         Task task = loadEditable(user, id);
+        Long previousAssigneeId = assigneeId(task);
         apply(task, request);
+        notifications.taskAssigned(user, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
@@ -153,6 +178,10 @@ public class TaskService {
                 || task.getAssignee() != null && Objects.equals(task.getAssignee().getId(), user.getId());
     }
 
+    private static Long assigneeId(Task task) {
+        return task.getAssignee() == null ? null : task.getAssignee().getId();
+    }
+
     private static boolean isOwner(User user, Task task) {
         return Objects.equals(task.getOwner().getId(), user.getId());
     }
@@ -192,8 +221,7 @@ public class TaskService {
             applyChecklist(task, request.checklist());
             task.touch();
         }
-        Long currentAssignee = task.getAssignee() == null ? null : task.getAssignee().getId();
-        if (!Objects.equals(currentAssignee, request.assigneeId())) {
+        if (!Objects.equals(assigneeId(task), request.assigneeId())) {
             task.setAssignee(request.assigneeId() == null ? null : loadMember(request.assigneeId()));
             task.touch();
         }
