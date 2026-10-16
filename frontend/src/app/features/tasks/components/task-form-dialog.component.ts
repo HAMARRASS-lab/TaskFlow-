@@ -1,4 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { Store } from '@ngrx/store';
+import { catchError, of } from 'rxjs';
 import { FormBuilder, FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatAutocompleteModule, MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
@@ -11,11 +14,14 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatButtonModule } from '@angular/material/button';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
+import { authFeature } from '../../../core/auth/store/auth.reducer';
+import { UserDirectoryService } from '../../../core/user-directory.service';
 import { TaskCommentsComponent } from '../comments/task-comments.component';
 import {
-  MAX_CHECKLIST_ITEMS, MAX_LABEL_LENGTH, MAX_LABELS, STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task, TaskPriority,
-  TaskRequest, TaskStatus, labelColor, normalizeLabel,
+  MAX_CHECKLIST_ITEMS, MAX_LABEL_LENGTH, MAX_LABELS, MAX_WATCHERS, STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task,
+  TaskPriority, TaskRequest, TaskStatus, UserSummary, labelColor, normalizeLabel,
 } from '../task.models';
+import { UserAvatarComponent } from './user-avatar.component';
 
 /** Formats a Date as YYYY-MM-DD in local time (what the API expects for LocalDate). */
 export function toIsoDate(date: Date | null): string | null {
@@ -36,7 +42,7 @@ export interface TaskFormData {
   standalone: true,
   imports: [ReactiveFormsModule, MatDialogModule, MatAutocompleteModule, MatCheckboxModule, MatChipsModule,
     MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatDatepickerModule, MatButtonModule,
-    TaskCommentsComponent],
+    TaskCommentsComponent, UserAvatarComponent],
   template: `
     <h2 mat-dialog-title>{{ task ? 'Edit task' : 'New task' }}</h2>
     <form [formGroup]="form" (ngSubmit)="save()">
@@ -69,6 +75,45 @@ export interface TaskFormData {
           <mat-datepicker-toggle matIconSuffix [for]="picker" />
           <mat-datepicker #picker />
         </mat-form-field>
+
+        <div class="row">
+          <mat-form-field appearance="outline">
+            <mat-label>Assignee</mat-label>
+            <mat-select formControlName="assigneeId" data-cy="task-assignee-select">
+              <mat-select-trigger>{{ nameOf(form.controls.assigneeId.value) }}</mat-select-trigger>
+              <mat-option [value]="null"><span class="muted">Unassigned</span></mat-option>
+              @for (u of users(); track u.id) {
+                <mat-option [value]="u.id">
+                  <span class="person">
+                    <app-user-avatar [user]="u" [size]="24" [tooltip]="null" />
+                    <span class="who">
+                      <span>{{ u.fullName }} @if (u.id === meId()) { <span class="muted">(you)</span> }</span>
+                      <span class="email">{{ u.email }}</span>
+                    </span>
+                  </span>
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Watchers</mat-label>
+            <mat-select formControlName="watcherIds" multiple data-cy="task-watchers-select">
+              <mat-select-trigger>{{ namesOf(form.controls.watcherIds.value) }}</mat-select-trigger>
+              @for (u of users(); track u.id) {
+                <mat-option [value]="u.id" [disabled]="watcherLimitReached(u.id)">
+                  <span class="person">
+                    <app-user-avatar [user]="u" [size]="24" [tooltip]="null" />
+                    <span class="who">
+                      <span>{{ u.fullName }} @if (u.id === meId()) { <span class="muted">(you)</span> }</span>
+                      <span class="email">{{ u.email }}</span>
+                    </span>
+                  </span>
+                </mat-option>
+              }
+            </mat-select>
+            <mat-hint>They see the task on their board</mat-hint>
+          </mat-form-field>
+        </div>
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Labels</mat-label>
@@ -127,7 +172,11 @@ export interface TaskFormData {
     </form>
   `,
   styles: [`
-    .row { display: flex; gap: 12px; } .row mat-form-field { flex: 1; }
+    .row { display: flex; gap: 12px; } .row mat-form-field { flex: 1; min-width: 0; }
+    .person { display: inline-flex; align-items: center; gap: 10px; }
+    /* the email tells apart people with the same name */
+    .who { display: flex; flex-direction: column; line-height: 1.25; }
+    .email { font-size: 12px; color: var(--tf-muted); }
     .checklist { margin: 4px 0 16px; }
     .checklist h3 { display: flex; gap: 8px; align-items: baseline; margin: 0 0 6px; font-size: 14px; font-weight: 600; }
     .muted { color: var(--tf-muted); font-weight: 400; font-size: 13px; }
@@ -150,6 +199,7 @@ export class TaskFormDialogComponent {
   readonly task = this.data?.task ?? null;
   private readonly dialogRef = inject(MatDialogRef<TaskFormDialogComponent, TaskRequest>);
   private readonly fb = inject(FormBuilder).nonNullable;
+  private readonly directory = inject(UserDirectoryService);
 
   readonly statuses = TASK_STATUSES;
   readonly priorities = TASK_PRIORITIES;
@@ -165,10 +215,19 @@ export class TaskFormDialogComponent {
     status: [this.task?.status ?? ('TODO' as TaskStatus), Validators.required],
     priority: [this.task?.priority ?? ('MEDIUM' as TaskPriority), Validators.required],
     dueDate: [this.task?.dueDate ? new Date(this.task.dueDate + 'T00:00:00') : (null as Date | null)],
+    assigneeId: [this.task?.assignee?.id ?? (null as number | null)],
+    watcherIds: [this.task?.watchers.map((w) => w.id) ?? ([] as number[])],
     checklist: this.fb.array((this.task?.checklist ?? []).map((i) => this.itemGroup(i.title, i.done, i.id))),
   });
 
   readonly labels = signal<string[]>([...(this.task?.labels ?? [])]);
+  /** Every user, plus the task's current people in case the directory can't be loaded. */
+  readonly users = toSignal(
+    this.directory.users().pipe(catchError(() => of(this.currentPeople()))),
+    { initialValue: this.currentPeople() },
+  );
+  private readonly me = toSignal(inject(Store).select(authFeature.selectUser), { initialValue: null });
+  readonly meId = computed(() => this.me()?.id ?? null);
   readonly labelInput = new FormControl('', { nonNullable: true });
   readonly newItem = new FormControl('', { nonNullable: true });
   private readonly labelQuery = signal('');
@@ -185,6 +244,24 @@ export class TaskFormDialogComponent {
     this.form.controls.checklist.valueChanges.subscribe(() =>
       this.checklistValue.set(this.form.controls.checklist.getRawValue()),
     );
+  }
+
+  nameOf(id: number | null): string {
+    return id === null ? 'Unassigned' : (this.users().find((u) => u.id === id)?.fullName ?? '');
+  }
+
+  namesOf(ids: number[]): string {
+    return this.users().filter((u) => ids.includes(u.id)).map((u) => u.fullName).join(', ');
+  }
+
+  watcherLimitReached(id: number): boolean {
+    const ids = this.form.controls.watcherIds.value;
+    return ids.length >= MAX_WATCHERS && !ids.includes(id);
+  }
+
+  private currentPeople(): UserSummary[] {
+    const people = [this.task?.assignee, ...(this.task?.watchers ?? [])].filter((u): u is UserSummary => !!u);
+    return [...new Map(people.map((u) => [u.id, u])).values()];
   }
 
   get checklist() {
@@ -240,6 +317,8 @@ export class TaskFormDialogComponent {
       dueDate: toIsoDate(v.dueDate),
       labels: this.labels(),
       checklist: v.checklist.map((i) => ({ id: i.id, title: i.title.trim(), done: i.done })),
+      assigneeId: v.assigneeId,
+      watcherIds: v.watcherIds,
     });
   }
 

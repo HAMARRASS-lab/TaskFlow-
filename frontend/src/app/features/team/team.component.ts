@@ -240,7 +240,7 @@ export class TeamComponent implements OnInit {
     this.admin.reassignTask(task.id, userId).subscribe({
       next: () => {
         const name = this.allUsers?.find((u) => u.id === userId)?.fullName ?? 'user';
-        this.snackBar.open(`"${task.title}" reassigned to ${name}`, 'Close', { duration: 3000 });
+        this.snackBar.open(`"${task.title}" transferred to ${name}`, 'Close', { duration: 3000 });
         this.tasks.update((tasks) => tasks.filter((t) => t.id !== task.id));
         this.loadOwners();
       },

@@ -2,6 +2,8 @@ import { Task, TaskPriority } from './task.models';
 
 export type DueFilter = 'ALL' | 'OVERDUE' | 'TODAY' | 'WEEK' | 'NONE';
 export type TaskSort = 'NEWEST' | 'OLDEST' | 'DUE_DATE' | 'PRIORITY' | 'TITLE';
+/** How the signed-in user is involved in the task (board only). */
+export type InvolvementFilter = 'ALL' | 'ASSIGNED' | 'CREATED' | 'WATCHING';
 
 /** Client-side search, filters and sort applied on top of the status filter. */
 export interface TaskQuery {
@@ -10,10 +12,20 @@ export interface TaskQuery {
   /** Only tasks carrying this label; `null` = any. */
   label: string | null;
   due: DueFilter;
+  involvement: InvolvementFilter;
   sort: TaskSort;
 }
 
-export const DEFAULT_TASK_QUERY: TaskQuery = { search: '', priority: 'ALL', label: null, due: 'ALL', sort: 'NEWEST' };
+export const DEFAULT_TASK_QUERY: TaskQuery = {
+  search: '', priority: 'ALL', label: null, due: 'ALL', involvement: 'ALL', sort: 'NEWEST',
+};
+
+export const INVOLVEMENT_LABELS: Record<InvolvementFilter, string> = {
+  ALL: 'All my tasks',
+  ASSIGNED: 'Assigned to me',
+  CREATED: 'Created by me',
+  WATCHING: 'Watching',
+};
 
 export const DUE_FILTER_LABELS: Record<DueFilter, string> = {
   ALL: 'Any due date',
@@ -35,7 +47,8 @@ const PRIORITY_RANK: Record<TaskPriority, number> = { HIGH: 0, MEDIUM: 1, LOW: 2
 
 /** True when the query filters anything out (sort alone does not count). */
 export function isQueryActive(query: TaskQuery): boolean {
-  return query.search.trim() !== '' || query.priority !== 'ALL' || query.label !== null || query.due !== 'ALL';
+  return query.search.trim() !== '' || query.priority !== 'ALL' || query.label !== null || query.due !== 'ALL'
+    || query.involvement !== 'ALL';
 }
 
 /** Lower-cases and strips accents so "réunion" matches "reunion". */
@@ -59,6 +72,16 @@ function matchesDue(task: Task, due: DueFilter, today: string, inAWeek: string):
   }
 }
 
+function matchesInvolvement(task: Task, involvement: InvolvementFilter, me: number | null): boolean {
+  if (me === null) return true;
+  switch (involvement) {
+    case 'ALL': return true;
+    case 'ASSIGNED': return task.assignee?.id === me;
+    case 'CREATED': return task.owner.id === me;
+    case 'WATCHING': return task.watchers.some((w) => w.id === me);
+  }
+}
+
 function compareDue(a: Task, b: Task): number {
   if (a.dueDate === b.dueDate) return 0;
   if (!a.dueDate) return 1;
@@ -77,8 +100,11 @@ function comparator(sort: TaskSort): (a: Task, b: Task) => number {
   }
 }
 
-/** Filters tasks by text (title, description, labels), priority, label and due date, then sorts them. */
-export function applyTaskQuery(tasks: Task[], query: TaskQuery, now = new Date()): Task[] {
+/**
+ * Filters tasks by text (title, description, labels, assignee), priority, label, due date and — given the signed-in
+ * user's id — involvement, then sorts them.
+ */
+export function applyTaskQuery(tasks: Task[], query: TaskQuery, now = new Date(), me: number | null = null): Task[] {
   const terms = normalize(query.search).split(/\s+/).filter(Boolean);
   const today = isoDate(now);
   const inAWeek = isoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
@@ -87,9 +113,10 @@ export function applyTaskQuery(tasks: Task[], query: TaskQuery, now = new Date()
     .filter((t) => query.priority === 'ALL' || t.priority === query.priority)
     .filter((t) => query.label === null || t.labels.includes(query.label))
     .filter((t) => matchesDue(t, query.due, today, inAWeek))
+    .filter((t) => matchesInvolvement(t, query.involvement, me))
     .filter((t) => {
       if (!terms.length) return true;
-      const haystack = normalize(`${t.title} ${t.description ?? ''} ${t.labels.join(' ')}`);
+      const haystack = normalize(`${t.title} ${t.description ?? ''} ${t.labels.join(' ')} ${t.assignee?.fullName ?? ''}`);
       return terms.every((term) => haystack.includes(term));
     })
     .sort(comparator(query.sort));

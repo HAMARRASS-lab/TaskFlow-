@@ -244,7 +244,7 @@ class ApiIntegrationTest {
 
         // ...but still can't modify them
         mvc.perform(delete("/api/tasks/{id}", taskId).header("Authorization", viewer))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -400,7 +400,7 @@ class ApiIntegrationTest {
                 .andExpect(status().isNotFound());
         mvc.perform(patch("/api/tasks/{id}/checklist/{item}", id, first).header("Authorization", other)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"done\":false}"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isForbidden());
 
         // an update without labels/checklist leaves them alone
         mvc.perform(put("/api/tasks/{id}", id).header("Authorization", owner)

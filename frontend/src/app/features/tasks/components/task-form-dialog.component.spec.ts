@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideMockStore } from '@ngrx/store/testing';
+import { authFeature } from '../../../core/auth/store/auth.reducer';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
@@ -23,14 +25,21 @@ describe('TaskFormDialogComponent', () => {
   const task: Task = {
     id: 3, title: 'Release', description: null, status: 'TODO', priority: 'HIGH', dueDate: null,
     labels: ['bug'], checklist: [{ id: 8, title: 'Tag', done: true }], createdAt: '', updatedAt: '',
+    owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [],
   };
+  const users = [
+    { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' },
+    { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' },
+    { id: 3, fullName: 'Carol Petit', email: 'carol@test.com' },
+  ];
 
   function create(data: TaskFormData) {
     close.mockReset();
     TestBed.configureTestingModule({
       imports: [TaskFormDialogComponent],
       providers: [provideHttpClient(), provideHttpClientTesting(), provideNoopAnimations(), provideNativeDateAdapter(),
-        { provide: MAT_DIALOG_DATA, useValue: data }, { provide: MatDialogRef, useValue: { close } }],
+        { provide: MAT_DIALOG_DATA, useValue: data }, { provide: MatDialogRef, useValue: { close } },
+        provideMockStore({ selectors: [{ selector: authFeature.selectUser, value: { id: 2, email: 'bob@test.com', fullName: 'Bob Durand', role: 'USER' } }] })],
     });
     const fixture = TestBed.createComponent(TaskFormDialogComponent);
     fixture.detectChanges();
@@ -50,6 +59,33 @@ describe('TaskFormDialogComponent', () => {
       labels: ['bug', 'front end'],
       checklist: [{ id: 8, title: 'Tag', done: true }, { id: null, title: 'Write notes', done: false }],
     }));
+  });
+
+  it('loads the user directory and sends the assignee and watchers', () => {
+    const dialog = create({ task: { ...task, assignee: users[0], watchers: [users[2]] }, labels: [] });
+    TestBed.inject(HttpTestingController).expectOne('/api/users').flush(users);
+    expect(dialog.users()).toEqual(users);
+    expect(dialog.nameOf(dialog.form.controls.assigneeId.value)).toBe('Alice Martin');
+    expect(dialog.meId()).toBe(2);
+
+    dialog.form.controls.assigneeId.setValue(2);
+    dialog.form.controls.watcherIds.setValue([3, 1]);
+    expect(dialog.namesOf(dialog.form.controls.watcherIds.value)).toBe('Alice Martin, Carol Petit');
+    dialog.save();
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ assigneeId: 2, watcherIds: [3, 1] }));
+  });
+
+  it("falls back to the task's own people when the directory can't be loaded", () => {
+    const dialog = create({ task: { ...task, assignee: users[1], watchers: [users[1], users[2]] }, labels: [] });
+    TestBed.inject(HttpTestingController).expectOne('/api/users').flush('down', { status: 500, statusText: 'Error' });
+    expect(dialog.users().map((u) => u.id)).toEqual([2, 3]);
+  });
+
+  it('creates unassigned tasks by default', () => {
+    const dialog = create({ task: null, labels: [] });
+    dialog.form.controls.title.setValue('New');
+    dialog.save();
+    expect(close).toHaveBeenCalledWith(expect.objectContaining({ assigneeId: null, watcherIds: [] }));
   });
 
   it('suggests labels in use that are not already on the task', () => {

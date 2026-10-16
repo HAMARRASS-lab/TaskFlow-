@@ -1,8 +1,11 @@
 import { inject } from '@angular/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { catchError, concatMap, exhaustMap, map, mergeMap, of, tap } from 'rxjs';
+import { Store } from '@ngrx/store';
+import { catchError, concatMap, exhaustMap, filter, map, mergeMap, of, tap, withLatestFrom } from 'rxjs';
 import { errorMessage } from '../../../core/api';
+import { authFeature } from '../../../core/auth/store/auth.reducer';
+import { isOnBoardOf } from '../task.models';
 import { TaskService } from '../task.service';
 import { TasksActions } from './tasks.actions';
 
@@ -76,6 +79,29 @@ export const deleteTask$ = createEffect(
       mergeMap(({ id }) =>
         api.delete(id).pipe(map(() => TasksActions.deleteSuccess({ id })), catchError(failure)),
       ),
+    ),
+  { functional: true },
+);
+
+export const unwatchTask$ = createEffect(
+  (actions$ = inject(Actions), api = inject(TaskService)) =>
+    actions$.pipe(
+      ofType(TasksActions.unwatch),
+      mergeMap(({ id }) =>
+        api.setWatching(id, false).pipe(map(() => TasksActions.leftBoard({ id })), catchError(failure)),
+      ),
+    ),
+  { functional: true },
+);
+
+/** After an edit (e.g. the assignee unassigned themselves), a task that no longer concerns the user leaves the board. */
+export const leaveBoard$ = createEffect(
+  (actions$ = inject(Actions), store = inject(Store)) =>
+    actions$.pipe(
+      ofType(TasksActions.updateSuccess),
+      withLatestFrom(store.select(authFeature.selectUser)),
+      filter(([{ task }, user]) => !!user && !isOnBoardOf(task, user.id)),
+      map(([{ task }]) => TasksActions.leftBoard({ id: task.id })),
     ),
   { functional: true },
 );

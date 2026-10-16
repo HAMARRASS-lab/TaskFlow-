@@ -19,6 +19,13 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+/** A user as shown on a task (owner, assignee, watcher) or in the user directory. */
+export interface UserSummary {
+  id: number;
+  fullName: string;
+  email: string;
+}
+
 export interface Task {
   id: number;
   title: string;
@@ -29,6 +36,12 @@ export interface Task {
   /** Lower-case, sorted. */
   labels: string[];
   checklist: ChecklistItem[];
+  /** Who created the task; only they can delete it. */
+  owner: UserSummary;
+  /** The teammate responsible for it; they can change it like the owner. */
+  assignee: UserSummary | null;
+  /** Users following it (sorted by name): it shows up, read-only, on their board. */
+  watchers: UserSummary[];
   createdAt: string;
   updatedAt: string;
 }
@@ -43,11 +56,40 @@ export interface TaskRequest {
   labels?: string[];
   /** Replaces the checklist in this order (items with an `id` are kept); omit to keep it. */
   checklist?: { id?: number | null; title: string; done: boolean }[];
+  /** `null` or omitted = unassigned. */
+  assigneeId?: number | null;
+  /** Replaces the watchers; omit to keep them. */
+  watcherIds?: number[];
 }
 
 export const MAX_LABELS = 10;
 export const MAX_LABEL_LENGTH = 30;
 export const MAX_CHECKLIST_ITEMS = 50;
+export const MAX_WATCHERS = 20;
+
+/** The owner and the assignee can change a task (same rule as the API). */
+export function canEditTask(task: Pick<Task, 'owner' | 'assignee'>, userId: number | null | undefined): boolean {
+  return userId != null && (task.owner.id === userId || task.assignee?.id === userId);
+}
+
+/** Only the owner can delete a task. */
+export function canDeleteTask(task: Pick<Task, 'owner'>, userId: number | null | undefined): boolean {
+  return userId != null && task.owner.id === userId;
+}
+
+export function isWatching(task: Pick<Task, 'watchers'>, userId: number | null | undefined): boolean {
+  return userId != null && task.watchers.some((w) => w.id === userId);
+}
+
+/** Whether the task belongs on the user's board (same rule as `GET /api/tasks`). */
+export function isOnBoardOf(task: Pick<Task, 'owner' | 'assignee' | 'watchers'>, userId: number | null | undefined): boolean {
+  return canEditTask(task, userId) || isWatching(task, userId);
+}
+
+/** "Alice van Dijk" → "AV". */
+export function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('');
+}
 
 /** Same rule as the API: trimmed, inner spaces collapsed, lower-case. */
 export function normalizeLabel(label: string): string {

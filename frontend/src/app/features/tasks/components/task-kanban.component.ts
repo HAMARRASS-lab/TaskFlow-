@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup } from '@angular/cdk/drag-drop';
-import { STATUS_LABELS, Task, TaskStatus } from '../task.models';
+import { STATUS_LABELS, Task, TaskStatus, canDeleteTask, canEditTask } from '../task.models';
 import { ChecklistToggle, TaskCardComponent } from './task-card.component';
 
 export interface KanbanColumn {
@@ -30,11 +30,14 @@ export interface StatusMove {
           <div class="drop" cdkDropList [cdkDropListData]="column.status" (cdkDropListDropped)="drop($event)"
                [attr.aria-label]="labels[column.status] + ' column'">
             @for (task of column.tasks; track task.id) {
-              <app-task-card cdkDrag [cdkDragData]="task" class="draggable" [task]="task"
+              <app-task-card cdkDrag [cdkDragData]="task" [cdkDragDisabled]="!canEdit(task)"
+                             [class.draggable]="canEdit(task)" [task]="task"
+                             [readonly]="!canEdit(task)" [canDelete]="canDelete(task)" [canUnwatch]="true"
                              (statusChange)="move.emit({ task, status: $event })"
                              (checklistToggle)="checklistToggle.emit({ task, toggle: $event })"
                              (edit)="edit.emit($event)"
-                             (remove)="remove.emit($event)">
+                             (remove)="remove.emit($event)"
+                             (unwatch)="unwatch.emit($event)">
                 <div *cdkDragPlaceholder class="placeholder"></div>
               </app-task-card>
             } @empty {
@@ -84,12 +87,23 @@ export class TaskKanbanComponent {
   @Input({ required: true }) columns!: KanbanColumn[];
   /** Search/filters are active: empty columns say "no matching tasks" rather than inviting a drop. */
   @Input() filtered = false;
+  /** The signed-in user: cards they can't change (watched tasks) are read-only and can't be dragged. */
+  @Input() meId: number | null = null;
   @Output() move = new EventEmitter<StatusMove>();
   @Output() checklistToggle = new EventEmitter<{ task: Task; toggle: ChecklistToggle }>();
   @Output() edit = new EventEmitter<Task>();
   @Output() remove = new EventEmitter<number>();
+  @Output() unwatch = new EventEmitter<number>();
 
   readonly labels = STATUS_LABELS;
+
+  canEdit(task: Task): boolean {
+    return canEditTask(task, this.meId);
+  }
+
+  canDelete(task: Task): boolean {
+    return canDeleteTask(task, this.meId);
+  }
 
   /** Reordering within a column isn't stored, so only cross-column drops do anything. */
   drop(event: CdkDragDrop<TaskStatus, TaskStatus, Task>): void {

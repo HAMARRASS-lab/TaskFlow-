@@ -4,8 +4,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { STATUS_LABELS, TASK_STATUSES, Task, TaskStatus, checklistProgress, isOverdue } from '../task.models';
 import { LabelChipComponent } from './label-chip.component';
+import { UserAvatarComponent } from './user-avatar.component';
 
 export interface ChecklistToggle {
   itemId: number;
@@ -15,7 +17,8 @@ export interface ChecklistToggle {
 @Component({
   selector: 'app-task-card',
   standalone: true,
-  imports: [DatePipe, MatButtonModule, MatCheckboxModule, MatIconModule, MatSelectModule, LabelChipComponent],
+  imports: [DatePipe, MatButtonModule, MatCheckboxModule, MatIconModule, MatSelectModule, MatTooltipModule,
+    LabelChipComponent, UserAvatarComponent],
   template: `
     <article class="card" [class.done]="task.status === 'DONE'" [attr.data-priority]="task.priority" data-cy="task-card">
       <div class="top">
@@ -31,8 +34,15 @@ export interface ChecklistToggle {
           <button mat-icon-button class="icon-btn" (click)="edit.emit(task)" aria-label="Edit" data-cy="edit-task">
             <mat-icon>edit</mat-icon>
           </button>
-          <button mat-icon-button class="icon-btn delete" (click)="remove.emit(task.id)" aria-label="Delete" data-cy="delete-task">
-            <mat-icon>delete_outline</mat-icon>
+          @if (canDelete) {
+            <button mat-icon-button class="icon-btn delete" (click)="remove.emit(task.id)" aria-label="Delete" data-cy="delete-task">
+              <mat-icon>delete_outline</mat-icon>
+            </button>
+          }
+        } @else if (canUnwatch) {
+          <button mat-icon-button class="icon-btn" (click)="unwatch.emit(task.id)" aria-label="Stop watching"
+                  matTooltip="Stop watching" data-cy="unwatch-task">
+            <mat-icon>visibility_off</mat-icon>
           </button>
         }
       </div>
@@ -76,6 +86,15 @@ export interface ChecklistToggle {
                     panelWidth="">
           @for (s of statuses; track s) { <mat-option [value]="s">{{ labels[s] }}</mat-option> }
         </mat-select>
+        }
+        <span class="spacer"></span>
+        @if (task.watchers.length) {
+          <span class="watchers" [matTooltip]="watcherNames" data-cy="task-watchers">
+            <mat-icon>visibility</mat-icon>{{ task.watchers.length }}
+          </span>
+        }
+        @if (task.assignee; as assignee) {
+          <app-user-avatar [user]="assignee" tooltip="Assigned to " data-cy="task-assignee" />
         }
       </div>
     </article>
@@ -135,7 +154,10 @@ export interface ChecklistToggle {
     .card.done .title { text-decoration: line-through; color: var(--tf-muted); }
     .card.done { background: #fbfcfd; }
 
-    .bottom { margin-top: auto; padding-top: 14px; display: flex; }
+    .bottom { margin-top: auto; padding-top: 14px; display: flex; align-items: center; gap: 10px; }
+    .spacer { flex: 1; }
+    .watchers { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--tf-muted); }
+    .watchers mat-icon { font-size: 16px; width: 16px; height: 16px; }
     .status {
       width: auto; min-width: 128px; padding: 6px 12px; border-radius: 99px; font-size: 13px; font-weight: 500;
       --mat-select-enabled-trigger-text-color: currentColor; --mat-select-enabled-arrow-color: currentColor;
@@ -148,12 +170,17 @@ export interface ChecklistToggle {
 })
 export class TaskCardComponent {
   @Input({ required: true }) task!: Task;
-  /** Hides edit/delete and shows the status as a label (viewing someone else's tasks). */
+  /** Hides edit/delete and shows the status as a label (a task the user can't change). */
   @Input() readonly = false;
+  /** Shows delete (owner only); ignored when readonly. */
+  @Input() canDelete = true;
+  /** Read-only card of a watched task: offers "Stop watching". */
+  @Input() canUnwatch = false;
   @Output() statusChange = new EventEmitter<TaskStatus>();
   @Output() edit = new EventEmitter<Task>();
   @Output() remove = new EventEmitter<number>();
   @Output() checklistToggle = new EventEmitter<ChecklistToggle>();
+  @Output() unwatch = new EventEmitter<number>();
 
   readonly statuses = TASK_STATUSES;
   readonly labels = STATUS_LABELS;
@@ -167,6 +194,10 @@ export class TaskCardComponent {
   toggleChecklist(event: Event): void {
     event.stopPropagation();
     this.expanded = !this.expanded;
+  }
+
+  get watcherNames(): string {
+    return 'Watched by ' + this.task.watchers.map((w) => w.fullName).join(', ');
   }
 
   get isOverdue(): boolean {

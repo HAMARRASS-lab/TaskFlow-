@@ -1,20 +1,26 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { provideMockStore } from '@ngrx/store/testing';
+import { authFeature } from '../../core/auth/store/auth.reducer';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TaskDetailDialogComponent, TaskDetailData } from './task-detail-dialog.component';
 
 describe('TaskDetailDialogComponent', () => {
   const close = jest.fn();
+  const signedIn = provideMockStore({ selectors: [{ selector: authFeature.selectUser, value: { id: 2, email: 'bob@test.com', fullName: 'Bob Durand', role: 'USER' } }] });
+
+  let fixture: ComponentFixture<TaskDetailDialogComponent>;
 
   function render(data: TaskDetailData): HTMLElement {
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
       providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
-        { provide: MatDialogRef, useValue: { close } }],
+        { provide: MatDialogRef, useValue: { close } },
+        signedIn],
     });
-    const fixture = TestBed.createComponent(TaskDetailDialogComponent);
+    fixture = TestBed.createComponent(TaskDetailDialogComponent);
     fixture.detectChanges();
     return fixture.nativeElement;
   }
@@ -24,7 +30,38 @@ describe('TaskDetailDialogComponent', () => {
     priority: 'HIGH' as const, dueDate: '2000-01-01', labels: ['design', 'ux'],
     checklist: [{ id: 1, title: 'Wireframes', done: true }, { id: 2, title: 'Copy', done: false }],
     createdAt: '2026-10-01T09:30:00', updatedAt: '2026-10-02T10:00:00',
+    owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null,
+    watchers: [] as { id: number; fullName: string; email: string }[],
   };
+  const bob = { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' };
+  const carol = { id: 3, fullName: 'Carol Petit', email: 'carol@test.com' };
+
+  it('shows the assignee and watchers, and lets the viewer watch the task', () => {
+    const el = render({ task: { ...task, assignee: carol, watchers: [carol] }, ownerName: 'Alice Martin' });
+    expect(el.querySelector('[data-cy=detail-assigned-to]')?.textContent).toContain('Carol Petit');
+    expect(el.querySelector('[data-cy=detail-watchers]')?.textContent).toContain('Carol Petit');
+
+    const watch = el.querySelector<HTMLButtonElement>('[data-cy=detail-watch]')!;
+    expect(watch.textContent).toContain('Watch');
+    watch.click();
+    const req = TestBed.inject(HttpTestingController).expectOne('/api/tasks/1/watch');
+    expect(req.request.method).toBe('PUT');
+    req.flush({ ...task, assignee: carol, watchers: [bob, carol] });
+    fixture.detectChanges();
+
+    expect(el.querySelector('[data-cy=detail-watchers]')?.textContent).toContain('Bob Durand, Carol Petit');
+    expect(watch.textContent).toContain('Stop watching');
+  });
+
+  it('stops watching with DELETE', () => {
+    const el = render({ task: { ...task, watchers: [bob] }, ownerName: 'Alice Martin' });
+    el.querySelector<HTMLButtonElement>('[data-cy=detail-watch]')!.click();
+    const req = TestBed.inject(HttpTestingController).expectOne('/api/tasks/1/watch');
+    expect(req.request.method).toBe('DELETE');
+    req.flush({ ...task, watchers: [] });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-cy=detail-watchers]')?.textContent).toContain('None');
+  });
 
   it('shows the full task with its owner and marks it overdue', () => {
     const el = render({ task, ownerName: 'Alice Martin' });
@@ -59,7 +96,7 @@ describe('TaskDetailDialogComponent', () => {
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
       providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
-        { provide: MatDialogRef, useValue: { close } }],
+        { provide: MatDialogRef, useValue: { close } }, signedIn],
     });
     const fixture = TestBed.createComponent(TaskDetailDialogComponent);
     fixture.detectChanges();

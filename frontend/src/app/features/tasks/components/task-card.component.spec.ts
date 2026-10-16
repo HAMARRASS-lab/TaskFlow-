@@ -10,6 +10,7 @@ describe('TaskCardComponent', () => {
     dueDate: '2026-12-31', labels: ['bug', 'frontend'],
     checklist: [{ id: 1, title: 'Outline', done: true }, { id: 2, title: 'Examples', done: false }],
     createdAt: '2026-10-01T10:00:00', updatedAt: '2026-10-01T10:00:00',
+    owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [],
   };
 
   beforeEach(() => {
@@ -82,5 +83,36 @@ describe('TaskCardComponent', () => {
     expect(el.querySelector('[data-cy=delete-task]')).toBeNull();
     expect(el.querySelector('[data-cy=status-select]')).toBeNull();
     expect(el.querySelector('[data-cy=task-status]')?.textContent).toContain('To do');
+  });
+
+  it("shows the assignee's avatar and the number of watchers", () => {
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-cy=task-assignee]')).toBeNull();
+    expect(el.querySelector('[data-cy=task-watchers]')).toBeNull();
+
+    fixture.componentRef.setInput('task', { ...task, assignee: { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' }, watchers: [{ id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' }] });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-cy=task-assignee] [data-cy=user-avatar]')?.textContent).toBe('BD');
+    expect(el.querySelector('[data-cy=task-assignee] [data-cy=user-avatar]')?.getAttribute('aria-label'))
+      .toBe('Assigned to Bob Durand');
+    expect(el.querySelector('[data-cy=task-watchers]')?.textContent).toContain('2');
+  });
+
+  it('lets the assignee edit but not delete', () => {
+    fixture.componentRef.setInput('canDelete', false);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-cy=edit-task]')).not.toBeNull();
+    expect(el.querySelector('[data-cy=delete-task]')).toBeNull();
+  });
+
+  it('offers "stop watching" on a read-only watched task', () => {
+    const spy = jest.fn();
+    fixture.componentInstance.unwatch.subscribe(spy);
+    fixture.componentRef.setInput('readonly', true);
+    fixture.componentRef.setInput('canUnwatch', true);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('[data-cy=unwatch-task]') as HTMLButtonElement).click();
+    expect(spy).toHaveBeenCalledWith(7);
   });
 });
