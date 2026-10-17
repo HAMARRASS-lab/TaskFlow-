@@ -48,7 +48,13 @@ export class AdminService {
     return this.http.post<Task>(`${this.url}/users/${userId}/tasks`, request);
   }
 
-  reassignTask(taskId: number, userId: number): Observable<Task> {
+  /** Gives the task (its ownership) to another user. */
+  transferTask(taskId: number, userId: number): Observable<Task> {
+    return this.http.patch<Task>(`${this.url}/tasks/${taskId}/owner`, { userId });
+  }
+
+  /** Assigns any task to any user; `null` unassigns it. */
+  assignTask(taskId: number, userId: number | null): Observable<Task> {
     return this.http.patch<Task>(`${this.url}/tasks/${taskId}/assignee`, { userId });
   }
 }

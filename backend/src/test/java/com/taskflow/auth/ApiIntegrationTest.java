@@ -280,7 +280,7 @@ class ApiIntegrationTest {
                         .content("{\"email\":\"nina-%s@test.com\",\"password\":\"password123\"}".formatted(suffix)))
                 .andExpect(status().isOk());
 
-        // assign a new task to Nina, then move it to Paula
+        // create a task for Nina, have Paula work on it, then give it to Paula
         String task = mvc.perform(post("/api/admin/users/{id}/tasks", ninaId).header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Assigned work\"}"))
                 .andExpect(status().isCreated())
@@ -289,9 +289,29 @@ class ApiIntegrationTest {
         long paulaId = json.readTree(mvc.perform(get("/api/auth/me").header("Authorization", user))
                 .andReturn().getResponse().getContentAsString()).get("id").asLong();
 
+        // only an admin can assign someone else's task; it then shows up on the assignee's board
+        mvc.perform(patch("/api/admin/tasks/{id}/assignee", taskId).header("Authorization", user)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":%d}".formatted(paulaId)))
+                .andExpect(status().isForbidden());
         mvc.perform(patch("/api/admin/tasks/{id}/assignee", taskId).header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":%d}".formatted(paulaId)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owner.id").value(ninaId))
+                .andExpect(jsonPath("$.assignee.id").value(paulaId));
+        mvc.perform(get("/api/tasks").header("Authorization", user))
+                .andExpect(jsonPath("$[?(@.id == %d)]".formatted(taskId)).exists());
+        mvc.perform(patch("/api/admin/tasks/{id}/assignee", taskId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":999999}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/admin/tasks/{id}/assignee", taskId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":null}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.assignee").doesNotExist());
+
+        mvc.perform(patch("/api/admin/tasks/{id}/owner", taskId).header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":%d}".formatted(paulaId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.owner.id").value(paulaId));
         mvc.perform(get("/api/tasks/{id}", taskId).header("Authorization", user))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("Assigned work"));

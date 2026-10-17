@@ -6,7 +6,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/** Read-only browsing of the tasks created by every user. */
+/** Read-only browsing of every user's tasks (created by or assigned to them), for the Team page. */
 @RestController
 @RequestMapping("/api/users")
 public class TaskOwnerController {

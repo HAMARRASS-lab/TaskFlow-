@@ -92,6 +92,32 @@ describe('TeamComponent', () => {
     expect(component.query().search).toBe('');
   });
 
+  it("shows the tasks assigned to the selected user, filterable by 'assigned to' / 'created by'", () => {
+    const alice = { id: 1, fullName: 'Alice Martin', email: 'alice@demo.com' };
+    const bob = { id: 2, fullName: 'Bob Durand', email: 'bob@demo.com' };
+    const base = { description: null, priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '', watchers: [] };
+    fixture.componentRef.setInput('userId', '2');
+    fixture.detectChanges();
+    http.expectOne('/api/users/2/tasks').flush([
+      { ...base, id: 20, title: 'Bob own task', status: 'TODO', owner: bob, assignee: null },
+      { ...base, id: 21, title: 'Assigned by Alice', status: 'TODO', owner: alice, assignee: bob },
+    ]);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const titles = () => Array.from(el.querySelectorAll('[data-cy=task-card] .title')).map((t) => t.textContent);
+
+    expect(titles()).toEqual(['Bob own task', 'Assigned by Alice']);
+    expect(el.querySelector('[data-cy=involvement-filter]')).not.toBeNull();
+
+    fixture.componentInstance.patchQuery({ involvement: 'ASSIGNED' });
+    fixture.detectChanges();
+    expect(titles()).toEqual(['Assigned by Alice']);
+
+    fixture.componentInstance.patchQuery({ involvement: 'CREATED' });
+    fixture.detectChanges();
+    expect(titles()).toEqual(['Bob own task']);
+  });
+
   it('opens the task details when a card is clicked', () => {
     const open = jest.spyOn(TestBed.inject(MatDialog), 'open');
     const task = { id: 10, title: 'Plan', description: 'Full text', status: 'TODO', priority: 'LOW', dueDate: null, labels: [], checklist: [], createdAt: '', updatedAt: '', owner: { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' }, assignee: null, watchers: [] };

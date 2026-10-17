@@ -9,10 +9,6 @@ import java.util.List;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
 
-    List<Task> findByOwnerIdOrderByCreatedAtDesc(Long ownerId);
-
-    List<Task> findByOwnerIdAndStatusOrderByCreatedAtDesc(Long ownerId, TaskStatus status);
-
     /** The user's board: tasks they created, are assigned to or watch, newest first. */
     @Query("""
             select distinct t from Task t left join t.watchers w
@@ -34,6 +30,14 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findDueForResponsible(@Param("userId") Long userId, @Param("status") TaskStatus status,
                                      @Param("until") LocalDate until);
 
+    /** A member's tasks on the Team page: those they created or are assigned to, newest first. */
+    @Query("""
+            select t from Task t
+            where t.owner.id = :userId or t.assignee.id = :userId
+            order by t.createdAt desc
+            """)
+    List<Task> findForMember(@Param("userId") Long userId);
+
     /** One row per (owner, status) pair that has at least one task. */
     @Query("""
             select o.id as ownerId, o.fullName as fullName, o.email as email, t.status as status, count(t) as count
@@ -41,6 +45,18 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             group by o.id, o.fullName, o.email, t.status
             """)
     List<OwnerStatusCount> countByOwnerAndStatus();
+
+    /**
+     * One row per (assignee, status) pair, for tasks assigned to someone other than their owner (a self-assigned
+     * task is already counted by {@link #countByOwnerAndStatus()}).
+     */
+    @Query("""
+            select a.id as ownerId, a.fullName as fullName, a.email as email, t.status as status, count(t) as count
+            from Task t join t.assignee a
+            where a.id <> t.owner.id
+            group by a.id, a.fullName, a.email, t.status
+            """)
+    List<OwnerStatusCount> countByAssigneeAndStatus();
 
     interface OwnerStatusCount {
         Long getOwnerId();

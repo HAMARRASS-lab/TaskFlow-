@@ -23,12 +23,12 @@ import {
                [value]="query.search" (input)="patch({ search: $any($event.target).value })" data-cy="task-search" />
       </mat-form-field>
 
-      @if (showInvolvement) {
+      @if (showInvolvement || involvementFor) {
         <mat-form-field appearance="outline" subscriptSizing="dynamic">
           <mat-icon matPrefix>person_search</mat-icon>
           <mat-select [value]="query.involvement" (selectionChange)="patch({ involvement: $event.value })"
                       aria-label="Show" data-cy="involvement-filter">
-            @for (i of involvements; track i) { <mat-option [value]="i">{{ involvementLabels[i] }}</mat-option> }
+            @for (o of involvementOptions; track o.value) { <mat-option [value]="o.value">{{ o.label }}</mat-option> }
           </mat-select>
         </mat-form-field>
       }
@@ -89,6 +89,8 @@ export class TaskQueryBarComponent {
   @Input() labels: string[] = [];
   /** Offer the "Assigned to me / Created by me / Watching" filter (the signed-in user's board). */
   @Input() showInvolvement = false;
+  /** Offer the "Assigned to … / Created by …" filter for this person instead (Team page). */
+  @Input() involvementFor: string | null = null;
   @Output() queryChange = new EventEmitter<Partial<TaskQuery>>();
   @Output() reset = new EventEmitter<void>();
 
@@ -97,8 +99,17 @@ export class TaskQueryBarComponent {
   readonly dueLabels = DUE_FILTER_LABELS;
   readonly sorts = Object.keys(SORT_LABELS) as TaskSort[];
   readonly sortLabels = SORT_LABELS;
-  readonly involvements = Object.keys(INVOLVEMENT_LABELS) as InvolvementFilter[];
-  readonly involvementLabels = INVOLVEMENT_LABELS;
+  get involvementOptions(): { value: InvolvementFilter; label: string }[] {
+    const name = this.involvementFor;
+    if (name) {
+      return [
+        { value: 'ALL', label: 'All their tasks' },
+        { value: 'ASSIGNED', label: `Assigned to ${name}` },
+        { value: 'CREATED', label: `Created by ${name}` },
+      ];
+    }
+    return (Object.keys(INVOLVEMENT_LABELS) as InvolvementFilter[]).map((value) => ({ value, label: INVOLVEMENT_LABELS[value] }));
+  }
 
   get active(): boolean {
     return isQueryActive(this.query);

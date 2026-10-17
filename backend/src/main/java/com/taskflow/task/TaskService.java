@@ -55,14 +55,19 @@ public class TaskService {
         return TaskResponse.from(loadTask(id));
     }
 
-    /** Every user who has created at least one task, with per-status counts, sorted by name. */
+    /**
+     * Every user who has created or is assigned at least one task, with per-status counts of those tasks, sorted by
+     * name.
+     */
     @Transactional(readOnly = true)
     public List<TaskOwnerSummary> findOwners() {
         Map<Long, long[]> counts = new LinkedHashMap<>();
         Map<Long, OwnerStatusCount> owners = new LinkedHashMap<>();
-        for (OwnerStatusCount row : tasks.countByOwnerAndStatus()) {
+        List<OwnerStatusCount> rows = new ArrayList<>(tasks.countByOwnerAndStatus());
+        rows.addAll(tasks.countByAssigneeAndStatus());
+        for (OwnerStatusCount row : rows) {
             owners.putIfAbsent(row.getOwnerId(), row);
-            counts.computeIfAbsent(row.getOwnerId(), id -> new long[TaskStatus.values().length])[row.getStatus().ordinal()] =
+            counts.computeIfAbsent(row.getOwnerId(), id -> new long[TaskStatus.values().length])[row.getStatus().ordinal()] +=
                     row.getCount();
         }
         return owners.values().stream()
@@ -75,14 +80,13 @@ public class TaskService {
                 .toList();
     }
 
-    /** Read-only view of the tasks another user created. */
+    /** Read-only view of another user's tasks: those they created or are assigned to. */
     @Transactional(readOnly = true)
     public List<TaskResponse> findByOwner(Long ownerId, TaskStatus status) {
-        Long id = loadUser(ownerId).getId();
-        List<Task> result = status == null
-                ? tasks.findByOwnerIdOrderByCreatedAtDesc(id)
-                : tasks.findByOwnerIdAndStatusOrderByCreatedAtDesc(id, status);
-        return result.stream().map(TaskResponse::from).toList();
+        return tasks.findForMember(loadUser(ownerId).getId()).stream()
+                .filter(t -> status == null || t.getStatus() == status)
+                .map(TaskResponse::from)
+                .toList();
     }
 
     public TaskResponse create(User owner, TaskRequest request) {
@@ -92,15 +96,23 @@ public class TaskService {
         return TaskResponse.from(tasks.save(task));
     }
 
-    /** Admin: creates a task owned by (assigned to) another user. */
+    /** Admin: creates a task owned by another user. */
     public TaskResponse createFor(Long userId, TaskRequest request) {
         return create(loadUser(userId), request);
     }
 
-    /** Admin: moves a task to another user. */
-    public TaskResponse reassign(Long id, Long userId) {
-        Task task = tasks.findById(id).orElseThrow(() -> new NotFoundException("Task " + id + " not found"));
+    /** Admin: gives the task (its ownership) to another user. */
+    public TaskResponse transferOwnership(Long id, Long userId) {
+        Task task = loadTask(id);
         task.setOwner(loadUser(userId));
+        return TaskResponse.from(tasks.saveAndFlush(task));
+    }
+
+    /** Admin: assigns any task to any user, or unassigns it ({@code userId} null). */
+    public TaskResponse assign(Long id, Long userId) {
+        Task task = loadTask(id);
+        task.setAssignee(userId == null ? null : loadMember(userId));
+        task.touch();
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 

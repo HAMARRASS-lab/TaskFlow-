@@ -1,8 +1,9 @@
 package com.taskflow.admin;
 
 import com.taskflow.admin.AdminDtos.AdminUserResponse;
-import com.taskflow.admin.AdminDtos.AssignRequest;
+import com.taskflow.admin.AdminDtos.AssigneeRequest;
 import com.taskflow.admin.AdminDtos.CreateUserRequest;
+import com.taskflow.admin.AdminDtos.TransferRequest;
 import com.taskflow.admin.AdminDtos.UpdateUserRequest;
 import com.taskflow.task.TaskDtos.TaskRequest;
 import com.taskflow.task.TaskDtos.TaskResponse;
@@ -51,16 +52,22 @@ public class AdminController {
         adminService.delete(admin, id);
     }
 
-    /** Creates a task assigned to the given user: it shows up on their board. */
+    /** Creates a task owned by the given user: it shows up on their board. */
     @PostMapping("/users/{id}/tasks")
     @ResponseStatus(HttpStatus.CREATED)
     public TaskResponse assignNew(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
         return taskService.createFor(id, request);
     }
 
-    /** Moves an existing task to another user. */
+    /** Gives an existing task (its ownership) to another user. */
+    @PatchMapping("/tasks/{id}/owner")
+    public TaskResponse transfer(@PathVariable Long id, @Valid @RequestBody TransferRequest request) {
+        return taskService.transferOwnership(id, request.userId());
+    }
+
+    /** Assigns any task to any user ({@code userId} null unassigns it). */
     @PatchMapping("/tasks/{id}/assignee")
-    public TaskResponse reassign(@PathVariable Long id, @Valid @RequestBody AssignRequest request) {
-        return taskService.reassign(id, request.userId());
+    public TaskResponse assign(@PathVariable Long id, @RequestBody AssigneeRequest request) {
+        return taskService.assign(id, request.userId());
     }
 }

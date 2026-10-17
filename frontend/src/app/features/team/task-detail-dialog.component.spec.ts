@@ -14,6 +14,7 @@ describe('TaskDetailDialogComponent', () => {
   let fixture: ComponentFixture<TaskDetailDialogComponent>;
 
   function render(data: TaskDetailData): HTMLElement {
+    close.mockClear();
     TestBed.configureTestingModule({
       imports: [TaskDetailDialogComponent],
       providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
@@ -86,26 +87,59 @@ describe('TaskDetailDialogComponent', () => {
     expect(el.textContent).not.toContain('Overdue');
   });
 
-  it('hides reassignment for non-admins', () => {
+  it('hides the admin section for non-admins', () => {
     const el = render({ task, ownerName: 'Bob' });
-    expect(el.querySelector('[data-cy=detail-reassign]')).toBeNull();
+    expect(el.querySelector('[data-cy=detail-admin]')).toBeNull();
+    expect(el.querySelector('[data-cy=detail-transfer]')).toBeNull();
   });
 
-  it('lets an admin reassign the task to another user', () => {
-    const data = { task, ownerName: 'Alice', ownerId: 1, assignees: [{ id: 1, fullName: 'Alice' }, { id: 2, fullName: 'Bob' }] };
-    TestBed.configureTestingModule({
-      imports: [TaskDetailDialogComponent],
-      providers: [provideNoopAnimations(), provideHttpClient(), provideHttpClientTesting(), { provide: MAT_DIALOG_DATA, useValue: data },
-        { provide: MatDialogRef, useValue: { close } }, signedIn],
-    });
-    const fixture = TestBed.createComponent(TaskDetailDialogComponent);
-    fixture.detectChanges();
-    const button = () => fixture.nativeElement.querySelector('[data-cy=detail-reassign]') as HTMLButtonElement;
+  const users = [
+    { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' },
+    { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' },
+  ];
+
+  it('lets an admin transfer the task to another user', () => {
+    render({ task, ownerName: 'Alice', ownerId: 1, users });
+    const button = () => fixture.nativeElement.querySelector('[data-cy=detail-transfer]') as HTMLButtonElement;
     expect(button().disabled).toBe(true);
 
-    fixture.componentInstance.assigneeId = 2;
+    fixture.componentInstance.transferTo = 2;
     fixture.detectChanges();
     button().click();
     expect(close).toHaveBeenCalledWith(2);
+  });
+
+  it('lets an admin assign the task to any user at once, and unassign it', () => {
+    const el = render({ task, ownerName: 'Alice', ownerId: 1, users });
+    const changes: unknown[] = [];
+    fixture.componentInstance.taskChange.subscribe((t) => changes.push(t));
+    const http = TestBed.inject(HttpTestingController);
+
+    fixture.componentInstance.assign(2);
+    let req = http.expectOne('/api/admin/tasks/1/assignee');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ userId: 2 });
+    req.flush({ ...task, assignee: users[1] });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-cy=detail-assigned-to]')?.textContent).toContain('Bob Durand');
+    expect(changes).toHaveLength(1);
+
+    fixture.componentInstance.assign(null);
+    req = http.expectOne('/api/admin/tasks/1/assignee');
+    expect(req.request.body).toEqual({ userId: null });
+    req.flush({ ...task, assignee: null });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-cy=detail-assigned-to]')?.textContent).toContain('Unassigned');
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('keeps the assignee when the API refuses the change', () => {
+    const el = render({ task: { ...task, assignee: users[0] }, ownerName: 'Alice', ownerId: 1, users });
+    fixture.componentInstance.assign(2);
+    TestBed.inject(HttpTestingController).expectOne('/api/admin/tasks/1/assignee')
+      .flush({ detail: 'Unknown assignee' }, { status: 400, statusText: 'Bad Request' });
+    fixture.detectChanges();
+    expect(el.querySelector('[data-cy=detail-assigned-to]')?.textContent).toContain('Alice Martin');
+    expect(fixture.componentInstance.busy()).toBe(false);
   });
 });
