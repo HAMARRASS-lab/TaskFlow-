@@ -55,8 +55,9 @@ public class AdminController {
     /** Creates a task owned by the given user: it shows up on their board. */
     @PostMapping("/users/{id}/tasks")
     @ResponseStatus(HttpStatus.CREATED)
-    public TaskResponse assignNew(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
-        return taskService.createFor(id, request);
+    public TaskResponse assignNew(@AuthenticationPrincipal User admin, @PathVariable Long id,
+                                  @Valid @RequestBody TaskRequest request) {
+        return taskService.createFor(admin, id, request);
     }
 
     /** Gives an existing task (its ownership) to another user. */
@@ -67,7 +68,8 @@ public class AdminController {
 
     /** Assigns any task to any user ({@code userId} null unassigns it). */
     @PatchMapping("/tasks/{id}/assignee")
-    public TaskResponse assign(@PathVariable Long id, @RequestBody AssigneeRequest request) {
-        return taskService.assign(id, request.userId());
+    public TaskResponse assign(@AuthenticationPrincipal User admin, @PathVariable Long id,
+                               @RequestBody AssigneeRequest request) {
+        return taskService.assign(admin, id, request.userId());
     }
 }

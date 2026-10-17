@@ -7,6 +7,8 @@ import com.taskflow.common.NotFoundException;
 import com.taskflow.meeting.MeetingDtos.MeetingRequest;
 import com.taskflow.meeting.MeetingDtos.MeetingResponse;
 import com.taskflow.meeting.MeetingDtos.ParticipantResponse;
+import com.taskflow.notification.NotificationService;
+import com.taskflow.notification.NotificationType;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +40,9 @@ class MeetingServiceTest {
 
     @Mock
     private UserRepository users;
+
+    @Mock
+    private NotificationService notifications;
 
     @InjectMocks
     private MeetingService service;
@@ -85,6 +90,8 @@ class MeetingServiceTest {
         assertThat(created.participants()).containsExactly(
                 new ParticipantResponse("bob@test.com", "Bob", ParticipantStatus.PENDING),
                 new ParticipantResponse("Carol", null, ParticipantStatus.PENDING));
+        verify(notifications).meetingChanged(eq(alice), argThat(m -> m.getId() == 7L),
+                eq(List.of("bob@test.com", "Carol")), eq(NotificationType.MEETING_INVITED));
     }
 
     @Test
@@ -114,10 +121,13 @@ class MeetingServiceTest {
         MeetingResponse renamed = service.update(alice, 3L,
                 new MeetingRequest("Daily stand-up", null, null, NINE, TEN, List.of("bob@test.com")));
         assertThat(renamed.participants().get(0).status()).isEqualTo(ACCEPTED);
+        verify(notifications).meetingChanged(alice, m, List.of(), NotificationType.MEETING_INVITED);
+        verify(notifications, never()).meetingChanged(any(), any(), any(), eq(NotificationType.MEETING_RESCHEDULED));
 
         MeetingResponse moved = service.update(alice, 3L,
                 new MeetingRequest("Daily stand-up", null, null, NINE, TEN.plusMinutes(30), List.of("bob@test.com")));
         assertThat(moved.participants().get(0).status()).isEqualTo(ParticipantStatus.PENDING);
+        verify(notifications).meetingChanged(alice, m, List.of("bob@test.com"), NotificationType.MEETING_RESCHEDULED);
     }
 
     @Test

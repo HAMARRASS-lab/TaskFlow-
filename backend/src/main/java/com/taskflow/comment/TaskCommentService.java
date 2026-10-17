@@ -5,6 +5,7 @@ import com.taskflow.comment.CommentDtos.CommentRequest;
 import com.taskflow.comment.CommentDtos.CommentResponse;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.Task;
 import com.taskflow.task.TaskRepository;
 import com.taskflow.user.Role;
@@ -25,10 +26,13 @@ public class TaskCommentService {
 
     private final TaskCommentRepository comments;
     private final TaskRepository tasks;
+    private final NotificationService notifications;
 
-    public TaskCommentService(TaskCommentRepository comments, TaskRepository tasks) {
+    public TaskCommentService(TaskCommentRepository comments, TaskRepository tasks,
+                              NotificationService notifications) {
         this.comments = comments;
         this.tasks = tasks;
+        this.notifications = notifications;
     }
 
     @Transactional(readOnly = true)
@@ -44,7 +48,9 @@ public class TaskCommentService {
         comment.setTask(loadTask(taskId));
         comment.setAuthor(author);
         comment.setBody(request.body().strip());
-        return toResponse(author, comments.save(comment));
+        TaskComment saved = comments.save(comment);
+        notifications.taskCommented(author, saved.getTask());
+        return toResponse(author, saved);
     }
 
     public void delete(User user, Long taskId, Long commentId) {

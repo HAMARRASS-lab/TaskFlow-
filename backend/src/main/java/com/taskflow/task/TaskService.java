@@ -3,6 +3,7 @@ package com.taskflow.task;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.TaskOwnerSummary;
 import com.taskflow.task.TaskDtos.TaskRequest;
@@ -35,10 +36,12 @@ public class TaskService {
 
     private final TaskRepository tasks;
     private final UserRepository users;
+    private final NotificationService notifications;
 
-    public TaskService(TaskRepository tasks, UserRepository users) {
+    public TaskService(TaskRepository tasks, UserRepository users, NotificationService notifications) {
         this.tasks = tasks;
         this.users = users;
+        this.notifications = notifications;
     }
 
     /** The user's board: tasks they created, are assigned to or watch. */
@@ -90,15 +93,21 @@ public class TaskService {
     }
 
     public TaskResponse create(User owner, TaskRequest request) {
-        Task task = new Task();
-        task.setOwner(owner);
-        apply(task, request);
-        return TaskResponse.from(tasks.save(task));
+        return create(owner, owner, request);
     }
 
     /** Admin: creates a task owned by another user. */
-    public TaskResponse createFor(Long userId, TaskRequest request) {
-        return create(loadUser(userId), request);
+    public TaskResponse createFor(User admin, Long userId, TaskRequest request) {
+        return create(admin, loadUser(userId), request);
+    }
+
+    private TaskResponse create(User actor, User owner, TaskRequest request) {
+        Task task = new Task();
+        task.setOwner(owner);
+        apply(task, request);
+        Task saved = tasks.save(task);
+        notifications.taskAssigned(actor, saved, null);
+        return TaskResponse.from(saved);
     }
 
     /** Admin: gives the task (its ownership) to another user. */
@@ -109,16 +118,20 @@ public class TaskService {
     }
 
     /** Admin: assigns any task to any user, or unassigns it ({@code userId} null). */
-    public TaskResponse assign(Long id, Long userId) {
+    public TaskResponse assign(User admin, Long id, Long userId) {
         Task task = loadTask(id);
+        Long previousAssigneeId = assigneeId(task);
         task.setAssignee(userId == null ? null : loadMember(userId));
         task.touch();
+        notifications.taskAssigned(admin, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
     public TaskResponse update(User user, Long id, TaskRequest request) {
         Task task = loadEditable(user, id);
+        Long previousAssigneeId = assigneeId(task);
         apply(task, request);
+        notifications.taskAssigned(user, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
@@ -165,6 +178,10 @@ public class TaskService {
                 || task.getAssignee() != null && Objects.equals(task.getAssignee().getId(), user.getId());
     }
 
+    private static Long assigneeId(Task task) {
+        return task.getAssignee() == null ? null : task.getAssignee().getId();
+    }
+
     private static boolean isOwner(User user, Task task) {
         return Objects.equals(task.getOwner().getId(), user.getId());
     }
@@ -204,8 +221,7 @@ public class TaskService {
             applyChecklist(task, request.checklist());
             task.touch();
         }
-        Long currentAssignee = task.getAssignee() == null ? null : task.getAssignee().getId();
-        if (!Objects.equals(currentAssignee, request.assigneeId())) {
+        if (!Objects.equals(assigneeId(task), request.assigneeId())) {
             task.setAssignee(request.assigneeId() == null ? null : loadMember(request.assigneeId()));
             task.touch();
         }

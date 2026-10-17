@@ -3,6 +3,7 @@ package com.taskflow.task;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
+import com.taskflow.notification.NotificationService;
 import com.taskflow.task.TaskDtos.ChecklistItemRequest;
 import com.taskflow.task.TaskDtos.ChecklistItemResponse;
 import com.taskflow.task.TaskDtos.TaskRequest;
@@ -36,6 +37,9 @@ class TaskServiceTest {
 
     @Mock
     private UserRepository users;
+
+    @Mock
+    private NotificationService notifications;
 
     @InjectMocks
     private TaskService service;
@@ -261,9 +265,13 @@ class TaskServiceTest {
         when(repository.saveAndFlush(task)).thenReturn(task);
         when(users.findById(2L)).thenReturn(Optional.of(bob));
 
-        assertThat(service.assign(5L, 2L).assignee().fullName()).isEqualTo("Bob");
+        User admin = user(9L, "Admin");
+
+        assertThat(service.assign(admin, 5L, 2L).assignee().fullName()).isEqualTo("Bob");
+        verify(notifications).taskAssigned(admin, task, null);
         assertThat(task.getOwner()).isSameAs(owner);
-        assertThat(service.assign(5L, null).assignee()).isNull();
+        assertThat(service.assign(admin, 5L, null).assignee()).isNull();
+        verify(notifications).taskAssigned(admin, task, 2L);
     }
 
     @Test
@@ -271,7 +279,7 @@ class TaskServiceTest {
         when(repository.findById(5L)).thenReturn(Optional.of(taskWithChecklist()));
         when(users.findById(42L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.assign(5L, 42L)).isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> service.assign(owner, 5L, 42L)).isInstanceOf(BadRequestException.class);
         verify(repository, never()).saveAndFlush(any());
     }
 
@@ -280,9 +288,12 @@ class TaskServiceTest {
         when(users.findById(1L)).thenReturn(Optional.of(owner));
         when(repository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.createFor(1L, new TaskRequest("Onboard", null, null, null, null));
+        User admin = user(9L, "Admin");
+
+        service.createFor(admin, 1L, new TaskRequest("Onboard", null, null, null, null));
 
         verify(repository).save(argThat(t -> t.getOwner() == owner && t.getTitle().equals("Onboard")));
+        verify(notifications).taskAssigned(eq(admin), argThat(t -> t.getOwner() == owner), isNull());
     }
 
     @Test
