@@ -5,6 +5,8 @@ public enum NotificationType {
     TASK_ASSIGNED,
     /** Someone commented on a task the recipient owns, is assigned to or watches. */
     TASK_COMMENTED,
+    /** Someone mentioned the recipient (@Full Name) in a comment on a task. */
+    TASK_MENTIONED,
     /** The recipient was invited to a meeting. */
     MEETING_INVITED,
     /** A meeting the recipient is invited to moved: they have to answer it again. */

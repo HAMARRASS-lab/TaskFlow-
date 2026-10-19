@@ -18,6 +18,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -59,8 +60,8 @@ class NotificationServiceTest {
     @SuppressWarnings("unchecked")
     private List<Notification> saved() {
         ArgumentCaptor<List<Notification>> captor = ArgumentCaptor.forClass(List.class);
-        verify(repository).saveAll(captor.capture());
-        return captor.getValue();
+        verify(repository, atLeastOnce()).saveAll(captor.capture());
+        return captor.getAllValues().stream().flatMap(List::stream).toList();
     }
 
     @Test
@@ -94,9 +95,23 @@ class NotificationServiceTest {
         task.getWatchers().add(bob);
         task.getWatchers().add(carol);
 
-        service.taskCommented(bob, task);
+        service.taskCommented(bob, task, List.of());
 
         assertThat(saved()).extracting(n -> n.getRecipient().getId()).containsExactlyInAnyOrder(1L, 3L);
+    }
+
+    @Test
+    void mentionedUsersAreToldTheyWereMentionedInsteadOfCommentedOn() {
+        User dave = user(4L, "Dave");
+        task.getWatchers().add(carol);
+
+        // Carol watches and is mentioned, Dave is only mentioned, Bob mentions himself
+        service.taskCommented(bob, task, List.of(carol, dave, bob));
+
+        assertThat(saved()).extracting(n -> n.getRecipient().getId(), Notification::getType).containsExactlyInAnyOrder(
+                tuple(3L, NotificationType.TASK_MENTIONED),
+                tuple(4L, NotificationType.TASK_MENTIONED),
+                tuple(1L, NotificationType.TASK_COMMENTED));
     }
 
     @Test

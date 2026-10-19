@@ -1,4 +1,4 @@
-export type NotificationType = 'TASK_ASSIGNED' | 'TASK_COMMENTED' | 'MEETING_INVITED' | 'MEETING_RESCHEDULED';
+export type NotificationType = 'TASK_ASSIGNED' | 'TASK_COMMENTED' | 'TASK_MENTIONED' | 'MEETING_INVITED' | 'MEETING_RESCHEDULED';
 
 export interface AppNotification {
   id: number;
@@ -16,6 +16,7 @@ export interface AppNotification {
 const ACTIONS: Record<NotificationType, string> = {
   TASK_ASSIGNED: 'assigned you',
   TASK_COMMENTED: 'commented on',
+  TASK_MENTIONED: 'mentioned you on',
   MEETING_INVITED: 'invited you to',
   MEETING_RESCHEDULED: 'rescheduled',
 };
@@ -23,6 +24,7 @@ const ACTIONS: Record<NotificationType, string> = {
 export const NOTIFICATION_ICONS: Record<NotificationType, string> = {
   TASK_ASSIGNED: 'assignment_ind',
   TASK_COMMENTED: 'chat_bubble_outline',
+  TASK_MENTIONED: 'alternate_email',
   MEETING_INVITED: 'event',
   MEETING_RESCHEDULED: 'update',
 };

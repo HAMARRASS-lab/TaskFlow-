@@ -4,13 +4,23 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public final class CommentDtos {
 
     private CommentDtos() {
     }
 
-    public record CommentRequest(@NotBlank @Size(max = 2000) String body) {
+    /**
+     * @param mentionedUserIds users picked in the "@" autocomplete; only those whose "@Full Name" is still in the
+     *                         body are notified. Optional.
+     */
+    public record CommentRequest(@NotBlank @Size(max = 2000) String body,
+                                 @Size(max = 20) List<Long> mentionedUserIds) {
+
+        public CommentRequest(String body) {
+            this(body, null);
+        }
     }
 
     public record AuthorResponse(Long id, String fullName) {

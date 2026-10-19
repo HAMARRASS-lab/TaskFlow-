@@ -12,8 +12,9 @@ export class CommentService {
     return this.http.get<TaskComment[]>(this.url(taskId));
   }
 
-  create(taskId: number, body: string): Observable<TaskComment> {
-    return this.http.post<TaskComment>(this.url(taskId), { body });
+  /** `mentionedUserIds`: the users picked in the "@" autocomplete; they are notified. */
+  create(taskId: number, body: string, mentionedUserIds: number[] = []): Observable<TaskComment> {
+    return this.http.post<TaskComment>(this.url(taskId), mentionedUserIds.length ? { body, mentionedUserIds } : { body });
   }
 
   delete(taskId: number, id: number): Observable<void> {

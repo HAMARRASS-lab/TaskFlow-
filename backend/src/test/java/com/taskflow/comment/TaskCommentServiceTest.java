@@ -9,6 +9,7 @@ import com.taskflow.task.Task;
 import com.taskflow.task.TaskRepository;
 import com.taskflow.user.Role;
 import com.taskflow.user.User;
+import com.taskflow.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,6 +33,9 @@ class TaskCommentServiceTest {
 
     @Mock
     private TaskRepository tasks;
+
+    @Mock
+    private UserRepository users;
 
     @Mock
     private NotificationService notifications;
@@ -71,7 +75,20 @@ class TaskCommentServiceTest {
         assertThat(created.author().fullName()).isEqualTo("Adam Author");
         assertThat(created.canDelete()).isTrue();
         verify(comments).save(argThat(c -> c.getTask() == task && c.getAuthor() == author));
-        verify(notifications).taskCommented(author, task);
+        verify(notifications).taskCommented(author, task, List.of());
+        verifyNoInteractions(users);
+    }
+
+    @Test
+    void createNotifiesPickedUsersWhoseNameIsStillInTheBody() {
+        when(tasks.findById(10L)).thenReturn(Optional.of(task));
+        when(comments.save(any(TaskComment.class))).thenAnswer(inv -> inv.getArgument(0));
+        // Oscar was picked, then his "@Oscar Other" was deleted from the text
+        when(users.findAllById(List.of(1L, 3L))).thenReturn(List.of(owner, other));
+
+        service.create(author, 10L, new CommentRequest("Thoughts, @olivia owner?", List.of(1L, 3L, 1L)));
+
+        verify(notifications).taskCommented(author, task, List.of(owner));
     }
 
     @Test

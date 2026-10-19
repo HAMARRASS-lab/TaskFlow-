@@ -30,7 +30,13 @@ describe('TaskCommentsComponent', () => {
 
   afterEach(() => http.verify());
 
+  const users = [
+    { id: 1, fullName: 'Alice Martin', email: 'alice@test.com' },
+    { id: 2, fullName: 'Bob Durand', email: 'bob@test.com' },
+  ];
+
   function load(list: TaskComment[] = comments): void {
+    http.expectOne('/api/users').flush(users);
     http.expectOne(url).flush(list);
     fixture.detectChanges();
   }
@@ -77,6 +83,54 @@ describe('TaskCommentsComponent', () => {
     req.flush(null, { status: 204, statusText: 'No Content' });
     fixture.detectChanges();
     expect(all('[data-cy=comment]').length).toBe(1);
+  });
+
+  it('highlights mentions of known users', () => {
+    load([{ ...comments[1], body: 'Thanks @Alice Martin!' }]);
+    const mentions = all('[data-cy=mention]');
+    expect(mentions.length).toBe(1);
+    expect(mentions[0].textContent).toBe('@Alice Martin');
+    expect(all('[data-cy=comment-body-text]')[0].textContent).toBe('Thanks @Alice Martin!');
+  });
+
+  it('suggests users after "@", inserts the picked one and sends their id', () => {
+    load();
+    const textarea = el().querySelector('[data-cy=comment-input]') as HTMLTextAreaElement;
+    const type = (value: string) => {
+      textarea.value = value;
+      textarea.setSelectionRange(value.length, value.length);
+      textarea.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+
+    type('Hey @du');
+    const options = all('[data-cy=mention-option]');
+    expect(options.length).toBe(1);
+    expect(options[0].textContent).toContain('Bob Durand');
+
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+    fixture.detectChanges();
+    expect(fixture.componentInstance.body.value).toBe('Hey @Bob Durand ');
+    expect(all('[data-cy=mention-option]').length).toBe(0);
+
+    type('Hey @Bob Durand, look');
+    fixture.componentInstance.post();
+    const req = http.expectOne(url);
+    expect(req.request.body).toEqual({ body: 'Hey @Bob Durand, look', mentionedUserIds: [2] });
+    req.flush({ id: 3, body: 'Hey @Bob Durand, look', author: users[0], createdAt: '2026-10-02T08:00:00', canDelete: true });
+  });
+
+  it('does not notify a picked user whose mention was edited away', () => {
+    load();
+    const c = fixture.componentInstance;
+    c.body.setValue('@Al');
+    const textarea = el().querySelector('[data-cy=comment-input]') as HTMLTextAreaElement;
+    textarea.setSelectionRange(3, 3);
+    c.updateMention();
+    c.pick(users[0]);
+    c.body.setValue('never mind');
+    c.post();
+    expect(http.expectOne(url).request.body).toEqual({ body: 'never mind' });
   });
 
   it('shows the server error when posting fails', () => {
