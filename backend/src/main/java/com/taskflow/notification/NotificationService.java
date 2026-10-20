@@ -69,14 +69,19 @@ public class NotificationService {
         }
     }
 
-    /** Tells everyone involved in the task (its owner, assignee and watchers) but the author. */
-    public void taskCommented(User author, Task task) {
+    /**
+     * Tells the users mentioned in the comment that they were mentioned, and everyone else involved in the task (its
+     * owner, assignee and watchers) that it was commented on; never the author, and nobody twice.
+     */
+    public void taskCommented(User author, Task task, Collection<User> mentioned) {
         Map<Long, User> involved = new LinkedHashMap<>();
         involved.put(task.getOwner().getId(), task.getOwner());
         if (task.getAssignee() != null) {
             involved.put(task.getAssignee().getId(), task.getAssignee());
         }
         task.getWatchers().forEach(w -> involved.put(w.getId(), w));
+        mentioned.forEach(m -> involved.remove(m.getId()));
+        send(author, mentioned, NotificationType.TASK_MENTIONED, task.getId(), null, task.getTitle());
         send(author, involved.values(), NotificationType.TASK_COMMENTED, task.getId(), null, task.getTitle());
     }
 

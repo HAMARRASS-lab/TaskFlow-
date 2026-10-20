@@ -80,6 +80,19 @@ class NotificationIntegrationTest {
         mvc.perform(get("/api/notifications/unread-count").header("Authorization", bob.bearer()))
                 .andExpect(jsonPath("$.count").value(1));
 
+        // Alice mentions Dave, who isn't involved in the task: he's told he was mentioned, Bob that she commented
+        Account dave = register("Dave");
+        mvc.perform(post("/api/tasks/{id}/comments", taskId).header("Authorization", alice.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"@Dave can you help?\",\"mentionedUserIds\":[%d]}".formatted(dave.id())))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/notifications").header("Authorization", dave.bearer()))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].type").value("TASK_MENTIONED"))
+                .andExpect(jsonPath("$[0].actor.fullName").value("Alice"));
+        mvc.perform(get("/api/notifications").header("Authorization", bob.bearer()))
+                .andExpect(jsonPath("$[0].type").value("TASK_COMMENTED"));
+
         // Carol is invited to a meeting
         LocalDateTime start = LocalDateTime.now().plusDays(3).withNano(0);
         mvc.perform(post("/api/meetings").header("Authorization", alice.bearer())
@@ -88,7 +101,7 @@ class NotificationIntegrationTest {
                                 .formatted(start, start.plusHours(1), carol.email())))
                 .andExpect(status().isCreated());
         String carolsList = mvc.perform(get("/api/notifications").header("Authorization", carol.bearer()))
-                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$.length()").value(3))
                 .andExpect(jsonPath("$[0].type").value("MEETING_INVITED"))
                 .andExpect(jsonPath("$[0].subject").value("Kickoff"))
                 .andReturn().getResponse().getContentAsString();
@@ -100,7 +113,7 @@ class NotificationIntegrationTest {
         mvc.perform(post("/api/notifications/{id}/read", invitationId).header("Authorization", carol.bearer()))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/notifications/unread-count").header("Authorization", carol.bearer()))
-                .andExpect(jsonPath("$.count").value(1));
+                .andExpect(jsonPath("$.count").value(2));
         mvc.perform(post("/api/notifications/read-all").header("Authorization", carol.bearer()))
                 .andExpect(status().isNoContent());
         mvc.perform(get("/api/notifications/unread-count").header("Authorization", carol.bearer()))
