@@ -58,6 +58,16 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             """)
     List<OwnerStatusCount> countByAssigneeAndStatus();
 
+    /** One row per status that has at least one task, across all users. */
+    @Query("select t.status as status, count(t) as count from Task t group by t.status")
+    List<StatusCount> countByStatus();
+
+    interface StatusCount {
+        TaskStatus getStatus();
+
+        long getCount();
+    }
+
     interface OwnerStatusCount {
         Long getOwnerId();
 

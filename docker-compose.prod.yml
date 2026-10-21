@@ -41,6 +41,8 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-true}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-true}
       MAIL_FROM: ${MAIL_FROM:-TaskFlow <no-reply@${DOMAIN}>}
+      # Admin assistant (chat bot); unset, the assistant is disabled
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
       JAVA_OPTS: -XX:MaxRAMPercentage=50
 
   frontend:

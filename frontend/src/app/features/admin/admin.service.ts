@@ -22,6 +22,10 @@ export interface UserRequest {
   password: string;
 }
 
+export interface ChatResponse {
+  reply: string;
+}
+
 /** Admin-only endpoints: user management and task assignment. */
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -56,5 +60,10 @@ export class AdminService {
   /** Assigns any task to any user; `null` unassigns it. */
   assignTask(taskId: number, userId: number | null): Observable<Task> {
     return this.http.patch<Task>(`${this.url}/tasks/${taskId}/assignee`, { userId });
+  }
+
+  /** Asks the admin assistant (chat bot) a question about tasks. */
+  chat(message: string): Observable<ChatResponse> {
+    return this.http.post<ChatResponse>(`${this.url}/assistant/chat`, { message });
   }
 }
