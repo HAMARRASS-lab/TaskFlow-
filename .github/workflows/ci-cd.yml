@@ -59,8 +59,10 @@ jobs:
       - uses: cypress-io/github-action@v6
         with:
           working-directory: frontend
-          start: npx ng serve --port 4200
-          wait-on: http://localhost:4200
+          # pin IPv4: "localhost" may resolve to ::1 for ng serve but 127.0.0.1 for wait-on (or vice versa)
+          start: npx ng serve --host 127.0.0.1 --port 4200
+          wait-on: http://127.0.0.1:4200
+          config: baseUrl=http://127.0.0.1:4200
           wait-on-timeout: 180
       - uses: actions/upload-artifact@v4
         if: failure()
