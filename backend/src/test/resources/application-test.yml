@@ -4,6 +4,10 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
+  # never call OpenAI from tests, even if a real key is in the local .env
+  ai:
+    openai:
+      api-key: not-set
 
 app:
   admin:

@@ -35,6 +35,8 @@ services:
       MAIL_ENABLED: "true"
       MAIL_HOST: mailpit
       MAIL_PORT: 1025
+      # Admin assistant (chat bot), read from the git-ignored .env
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
     ports:
       - "8080:8080"
 

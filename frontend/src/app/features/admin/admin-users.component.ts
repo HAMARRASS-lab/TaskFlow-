@@ -13,6 +13,7 @@ import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
 import { TaskFormDialogComponent } from '../tasks/components/task-form-dialog.component';
 import { TaskRequest } from '../tasks/task.models';
+import { AdminAssistantComponent } from './admin-assistant.component';
 import { AdminService, AdminUser, UserRequest } from './admin.service';
 import { UserFormDialogComponent } from './user-form-dialog.component';
 
@@ -20,7 +21,7 @@ import { UserFormDialogComponent } from './user-form-dialog.component';
 @Component({
   selector: 'app-admin-users',
   standalone: true,
-  imports: [DatePipe, RouterLink, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
+  imports: [DatePipe, RouterLink, AdminAssistantComponent, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
   template: `
     <div class="page">
       <header class="head">
@@ -32,6 +33,8 @@ import { UserFormDialogComponent } from './user-form-dialog.component';
           <mat-icon>person_add</mat-icon> New user
         </button>
       </header>
+
+      <app-admin-assistant />
 
       @if (loading()) { <mat-progress-bar mode="indeterminate" class="loading" /> }
       @if (error()) { <p class="error" data-cy="error">{{ error() }}</p> }

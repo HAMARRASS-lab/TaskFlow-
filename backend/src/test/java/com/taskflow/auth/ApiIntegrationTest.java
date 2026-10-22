@@ -258,6 +258,14 @@ class ApiIntegrationTest {
                 .andExpect(jsonPath("$.role").value("ADMIN"));
         mvc.perform(get("/api/admin/users").header("Authorization", user)).andExpect(status().isForbidden());
 
+        // the assistant is admin-only, and answers 503 while no OpenAI key is configured (as in tests)
+        String question = "{\"message\":\"How many tasks are to do?\"}";
+        mvc.perform(post("/api/admin/assistant/chat").header("Authorization", user)
+                .contentType(MediaType.APPLICATION_JSON).content(question)).andExpect(status().isForbidden());
+        mvc.perform(post("/api/admin/assistant/chat").header("Authorization", admin)
+                        .contentType(MediaType.APPLICATION_JSON).content(question))
+                .andExpect(status().isServiceUnavailable());
+
         String created = mvc.perform(post("/api/admin/users").header("Authorization", admin)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"New-%s@test.com\",\"password\":\"password123\",\"fullName\":\"Nina New\"}"

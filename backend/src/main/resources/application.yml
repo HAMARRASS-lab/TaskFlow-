@@ -1,6 +1,9 @@
 spring:
   application:
     name: taskflow-backend
+  # Local secrets (e.g. OPENAI_API_KEY) from the git-ignored .env at the repo root, whether run from there or backend/
+  config:
+    import: optional:file:.env[.properties],optional:file:../.env[.properties]
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:taskflow}
     username: ${DB_USER:taskflow}
@@ -24,6 +27,21 @@ spring:
       mail.smtp.connectiontimeout: 5000
       mail.smtp.timeout: 5000
       mail.smtp.writetimeout: 5000
+  # Admin assistant (chat bot). Without OPENAI_API_KEY the app still starts; the assistant answers 503.
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:not-set}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:gpt-4o-mini}
+          temperature: 0.2
+    model:
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
 
 server:
   port: ${PORT:8080}
