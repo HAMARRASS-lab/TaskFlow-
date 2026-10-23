@@ -96,14 +96,23 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Reminds the user responsible for the task of its due date ({@link NotificationType#TASK_DUE_SOON} or
+     * {@link NotificationType#TASK_OVERDUE}). The app sends it, so it has no actor.
+     */
+    public void taskDeadline(User recipient, Task task, NotificationType type) {
+        send(null, List.of(recipient), type, task.getId(), null, task.getTitle());
+    }
+
+    /** {@code actor} is {@code null} for notifications sent by the app itself. */
     private void send(User actor, Collection<User> recipients, NotificationType type, Long taskId, Long meetingId,
                       String subject) {
         List<Notification> batch = recipients.stream()
-                .filter(r -> !Objects.equals(r.getId(), actor.getId()))
+                .filter(r -> actor == null || !Objects.equals(r.getId(), actor.getId()))
                 .map(r -> {
                     Notification n = new Notification();
                     n.setRecipient(users.getReferenceById(r.getId()));
-                    n.setActor(users.getReferenceById(actor.getId()));
+                    n.setActor(actor == null ? null : users.getReferenceById(actor.getId()));
                     n.setType(type);
                     n.setTaskId(taskId);
                     n.setMeetingId(meetingId);

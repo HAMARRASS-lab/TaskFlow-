@@ -14,3 +14,5 @@ app:
     emails: admin@test.com
   digest:
     cron: "-"
+  reminders:
+    cron: "-"
