@@ -1,10 +1,12 @@
 package com.taskflow.task;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface TaskRepository extends JpaRepository<Task, Long> {
@@ -29,6 +31,31 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
             """)
     List<Task> findDueForResponsible(@Param("userId") Long userId, @Param("status") TaskStatus status,
                                      @Param("until") LocalDate until);
+
+    /** Open tasks due on {@code day} whose "due tomorrow" reminder hasn't been sent for that due date yet. */
+    @Query("""
+            select t from Task t join fetch t.owner left join fetch t.assignee
+            where t.status <> :done and t.dueDate = :day
+              and (t.dueReminderSentFor is null or t.dueReminderSentFor <> t.dueDate)
+            """)
+    List<Task> findNeedingDueReminder(@Param("day") LocalDate day, @Param("done") TaskStatus done);
+
+    /** Open tasks due before {@code today} whose overdue notice hasn't been sent for that due date yet. */
+    @Query("""
+            select t from Task t join fetch t.owner left join fetch t.assignee
+            where t.status <> :done and t.dueDate < :today
+              and (t.overdueNoticeSentFor is null or t.overdueNoticeSentFor <> t.dueDate)
+            """)
+    List<Task> findNeedingOverdueNotice(@Param("today") LocalDate today, @Param("done") TaskStatus done);
+
+    /** Bulk update, so recording a reminder doesn't bump the tasks' {@code updatedAt}. */
+    @Modifying
+    @Query("update Task t set t.dueReminderSentFor = t.dueDate where t.id in :ids")
+    int markDueReminderSent(@Param("ids") Collection<Long> ids);
+
+    @Modifying
+    @Query("update Task t set t.overdueNoticeSentFor = t.dueDate where t.id in :ids")
+    int markOverdueNoticeSent(@Param("ids") Collection<Long> ids);
 
     /** A member's tasks on the Team page: those they created or are assigned to, newest first. */
     @Query("""

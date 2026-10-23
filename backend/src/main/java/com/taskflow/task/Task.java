@@ -66,6 +66,14 @@ public class Task {
     @BatchSize(size = 50)
     private List<ChecklistItem> checklist = new ArrayList<>();
 
+    /** The due date the "due tomorrow" reminder was sent for (a new due date gets a new reminder). */
+    @Column(name = "due_reminder_sent_for")
+    private LocalDate dueReminderSentFor;
+
+    /** The due date the "overdue" notice was sent for. */
+    @Column(name = "overdue_notice_sent_for")
+    private LocalDate overdueNoticeSentFor;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -107,6 +115,8 @@ public class Task {
     public Set<User> getWatchers() { return watchers; }
     public Set<String> getLabels() { return labels; }
     public List<ChecklistItem> getChecklist() { return checklist; }
+    public LocalDate getDueReminderSentFor() { return dueReminderSentFor; }
+    public LocalDate getOverdueNoticeSentFor() { return overdueNoticeSentFor; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
 }

@@ -67,6 +67,9 @@ app:
   digest:
     # Spring cron (sec min hour day month weekday); "-" disables the digest.
     cron: ${DIGEST_CRON:0 0 7 * * MON-FRI}
+  reminders:
+    # "Due tomorrow" and "overdue" reminders (bell + email); every day, weekends included. "-" disables them.
+    cron: ${REMINDERS_CRON:0 0 8 * * *}
 
 management:
   endpoints:
