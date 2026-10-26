@@ -12,6 +12,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { errorMessage } from '../../core/api';
 import { authFeature } from '../../core/auth/store/auth.reducer';
+import { TaskActivityComponent } from '../tasks/activity/task-activity.component';
 import { TaskCommentsComponent } from '../tasks/comments/task-comments.component';
 import { LabelChipComponent } from '../tasks/components/label-chip.component';
 import { AdminService } from '../admin/admin.service';
@@ -34,7 +35,7 @@ export interface TaskDetailData {
 @Component({
   selector: 'app-task-detail-dialog',
   standalone: true,
-  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent, LabelChipComponent, UserAvatarComponent],
+  imports: [DatePipe, FormsModule, MatDialogModule, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule, TaskCommentsComponent, TaskActivityComponent, LabelChipComponent, UserAvatarComponent],
   template: `
     <h2 mat-dialog-title data-cy="detail-title">{{ task().title }}</h2>
     <mat-dialog-content>
@@ -102,6 +103,7 @@ export interface TaskDetailData {
       }
 
       <app-task-comments [taskId]="task().id" />
+      <app-task-activity [taskId]="task().id" [version]="task().updatedAt" />
 
     </mat-dialog-content>
     <mat-dialog-actions align="end">

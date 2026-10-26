@@ -130,8 +130,9 @@ describe('TeamComponent', () => {
     expect(open).toHaveBeenCalledWith(TaskDetailDialogComponent, expect.objectContaining({
       data: { task, ownerName: 'Alice Martin' },
     }));
-    // the dialog loads the task's comment thread, and the users that can be mentioned in it
+    // the dialog loads the task's comment thread, the users that can be mentioned in it, and its activity
     http.expectOne('/api/tasks/10/comments').flush([]);
     http.expectOne('/api/users').flush([]);
+    http.expectOne('/api/tasks/10/activity').flush([]);
   });
 });
