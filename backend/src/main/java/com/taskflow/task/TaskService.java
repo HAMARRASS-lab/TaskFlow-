@@ -1,5 +1,7 @@
 package com.taskflow.task;
 
+import com.taskflow.activity.TaskActivityService;
+import com.taskflow.activity.TaskActivityService.Snapshot;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
@@ -28,7 +30,8 @@ import java.util.stream.Collectors;
 
 /**
  * Tasks are created by an owner and can be assigned to a teammate and watched by others. Everyone can read every
- * task (see the Team page); the owner and the assignee can change it; only the owner can delete it.
+ * task (see the Team page); the owner and the assignee can change it; only the owner can delete it. Creation and
+ * changes of status, priority, assignee or due date are recorded in the task's activity history.
  */
 @Service
 @Transactional
@@ -37,11 +40,14 @@ public class TaskService {
     private final TaskRepository tasks;
     private final UserRepository users;
     private final NotificationService notifications;
+    private final TaskActivityService activity;
 
-    public TaskService(TaskRepository tasks, UserRepository users, NotificationService notifications) {
+    public TaskService(TaskRepository tasks, UserRepository users, NotificationService notifications,
+                       TaskActivityService activity) {
         this.tasks = tasks;
         this.users = users;
         this.notifications = notifications;
+        this.activity = activity;
     }
 
     /** The user's board: tasks they created, are assigned to or watch. */
@@ -106,6 +112,7 @@ public class TaskService {
         task.setOwner(owner);
         apply(task, request);
         Task saved = tasks.save(task);
+        activity.created(actor, saved);
         notifications.taskAssigned(actor, saved, null);
         return TaskResponse.from(saved);
     }
@@ -120,24 +127,30 @@ public class TaskService {
     /** Admin: assigns any task to any user, or unassigns it ({@code userId} null). */
     public TaskResponse assign(User admin, Long id, Long userId) {
         Task task = loadTask(id);
+        Snapshot before = Snapshot.of(task);
         Long previousAssigneeId = assigneeId(task);
         task.setAssignee(userId == null ? null : loadMember(userId));
         task.touch();
+        activity.changed(admin, task, before);
         notifications.taskAssigned(admin, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
     public TaskResponse update(User user, Long id, TaskRequest request) {
         Task task = loadEditable(user, id);
+        Snapshot before = Snapshot.of(task);
         Long previousAssigneeId = assigneeId(task);
         apply(task, request);
+        activity.changed(user, task, before);
         notifications.taskAssigned(user, task, previousAssigneeId);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 
     public TaskResponse updateStatus(User user, Long id, TaskStatus status) {
         Task task = loadEditable(user, id);
+        Snapshot before = Snapshot.of(task);
         task.setStatus(status);
+        activity.changed(user, task, before);
         return TaskResponse.from(tasks.saveAndFlush(task));
     }
 

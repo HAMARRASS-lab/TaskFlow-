@@ -1,5 +1,6 @@
 package com.taskflow.task;
 
+import com.taskflow.activity.TaskActivityService;
 import com.taskflow.common.BadRequestException;
 import com.taskflow.common.ForbiddenException;
 import com.taskflow.common.NotFoundException;
@@ -40,6 +41,9 @@ class TaskServiceTest {
 
     @Mock
     private NotificationService notifications;
+
+    @Mock
+    private TaskActivityService activity;
 
     @InjectMocks
     private TaskService service;
@@ -93,6 +97,21 @@ class TaskServiceTest {
         TaskResponse updated = service.updateStatus(owner, 5L, TaskStatus.DONE);
 
         assertThat(updated.status()).isEqualTo(TaskStatus.DONE);
+    }
+
+    @Test
+    void changesAreRecordedInTheActivityHistoryAgainstTheTaskAsItWasBefore() {
+        Task task = new Task();
+        task.setId(5L);
+        task.setTitle("Deploy");
+        task.setOwner(owner);
+        when(repository.findById(5L)).thenReturn(Optional.of(task));
+        when(repository.saveAndFlush(task)).thenReturn(task);
+
+        service.updateStatus(owner, 5L, TaskStatus.DONE);
+
+        verify(activity).changed(eq(owner), eq(task),
+                argThat(before -> before.status() == TaskStatus.TODO && before.priority() == TaskPriority.MEDIUM));
     }
 
     @Test
