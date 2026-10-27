@@ -186,7 +186,7 @@ public class TaskService {
     }
 
     /** Whether the user may change the task (not delete it): its owner or its assignee. */
-    static boolean canEdit(User user, Task task) {
+    public static boolean canEdit(User user, Task task) {
         return isOwner(user, task)
                 || task.getAssignee() != null && Objects.equals(task.getAssignee().getId(), user.getId());
     }
