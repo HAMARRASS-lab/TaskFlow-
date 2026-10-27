@@ -18,6 +18,7 @@ import { authFeature } from '../../../core/auth/store/auth.reducer';
 import { UserDirectoryService } from '../../../core/user-directory.service';
 import { TaskActivityComponent } from '../activity/task-activity.component';
 import { TaskCommentsComponent } from '../comments/task-comments.component';
+import { TaskTimeComponent } from '../time/task-time.component';
 import {
   MAX_CHECKLIST_ITEMS, MAX_LABEL_LENGTH, MAX_LABELS, MAX_WATCHERS, STATUS_LABELS, TASK_PRIORITIES, TASK_STATUSES, Task,
   TaskPriority, TaskRequest, TaskStatus, UserSummary, labelColor, normalizeLabel,
@@ -43,7 +44,7 @@ export interface TaskFormData {
   standalone: true,
   imports: [ReactiveFormsModule, MatDialogModule, MatAutocompleteModule, MatCheckboxModule, MatChipsModule,
     MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatDatepickerModule, MatButtonModule,
-    TaskCommentsComponent, TaskActivityComponent, UserAvatarComponent],
+    TaskTimeComponent, TaskCommentsComponent, TaskActivityComponent, UserAvatarComponent],
   template: `
     <h2 mat-dialog-title>{{ task ? 'Edit task' : 'New task' }}</h2>
     <form [formGroup]="form" (ngSubmit)="save()">
@@ -165,6 +166,7 @@ export interface TaskFormData {
         </section>
 
         @if (task) {
+          <app-task-time [taskId]="task.id" />
           <app-task-comments [taskId]="task.id" />
           <app-task-activity [taskId]="task.id" />
         }

@@ -66,6 +66,10 @@ public class Task {
     @BatchSize(size = 50)
     private List<ChecklistItem> checklist = new ArrayList<>();
 
+    /** How long the task should take; {@code null} = no estimate. Compared with the time logged on it. */
+    @Column(name = "estimate_minutes")
+    private Integer estimateMinutes;
+
     /** The due date the "due tomorrow" reminder was sent for (a new due date gets a new reminder). */
     @Column(name = "due_reminder_sent_for")
     private LocalDate dueReminderSentFor;
@@ -115,6 +119,8 @@ public class Task {
     public Set<User> getWatchers() { return watchers; }
     public Set<String> getLabels() { return labels; }
     public List<ChecklistItem> getChecklist() { return checklist; }
+    public Integer getEstimateMinutes() { return estimateMinutes; }
+    public void setEstimateMinutes(Integer estimateMinutes) { this.estimateMinutes = estimateMinutes; }
     public LocalDate getDueReminderSentFor() { return dueReminderSentFor; }
     public LocalDate getOverdueNoticeSentFor() { return overdueNoticeSentFor; }
     public LocalDateTime getCreatedAt() { return createdAt; }
