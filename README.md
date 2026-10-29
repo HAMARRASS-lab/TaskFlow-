@@ -76,6 +76,8 @@ cd frontend && npm start & npm run e2e   # Cypress (headless); npm run e2e:open 
 | POST | `/api/tasks/{id}/time/entries` | log time by hand `{minutes, note?}` (1–1440 min) |
 | DELETE | `/api/tasks/{id}/time/entries/{entryId}` | delete a time entry I logged |
 | PUT | `/api/tasks/{id}/time/estimate` | `{minutes}` — `null` removes the estimate (owner or assignee) |
+| GET | `/api/time/report?from=&to=&userId=` | time logged from `from` to `to` (ISO dates, both included, ≤ 366 days), everyone's or one user's: totals per user, label, week (Mondays) and top 10 tasks |
+| GET | `/api/time/report/csv?from=&to=&userId=` | the same entries as a CSV download, one row per entry |
 | GET | `/api/users/task-owners` | users who created at least one task, with `todo/inProgress/done/total` counts |
 | GET | `/api/users/{id}/tasks?status=` | that user's tasks, read-only (404 if the user doesn't exist) |
 | GET | `/api/meetings?from=&to=` | meetings I organize or am invited to, overlapping `[from, to)` (ISO local date-times, optional) |

@@ -40,6 +40,9 @@ import { NotificationBellComponent } from './features/notifications/notification
           <a routerLink="/team" routerLinkActive="active" data-cy="nav-team">
             <mat-icon>group</mat-icon><span>Team</span>
           </a>
+          <a routerLink="/reports" routerLinkActive="active" data-cy="nav-reports">
+            <mat-icon>insights</mat-icon><span>Reports</span>
+          </a>
           @if (isAdmin()) {
             <a routerLink="/admin" routerLinkActive="active" data-cy="nav-admin">
               <mat-icon>admin_panel_settings</mat-icon><span>Admin</span>
